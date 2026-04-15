@@ -1,0 +1,15 @@
+Flutter Windows build + native assets + MSBuild do not handle Unicode folder names reliably.
+
+If you see:
+  Unable to read file: ...\app.dill
+  Target dart_build failed: Building native assets failed
+and the log shows "di?m danh" instead of your real folder name:
+
+  Move or clone this project to an ASCII-only path, for example:
+    D:\dev\attendance_app
+
+Then run:
+    powershell -File tool\verify_windows_path.ps1
+    flutter run -d windows
+
+Optional: run the same app on Android emulator (10.0.2.2) without moving the folder — Android builds are less sensitive to this path issue.

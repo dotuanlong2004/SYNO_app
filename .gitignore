@@ -1,0 +1,11 @@
+node_modules/
+build/
+.dart_tool/
+flutter-sdk/
+.env
+
+backend/firebase-service-account.json
+zk-agent/agent-buffer.sqlite
+
+database_credentials.txt
+debug-dbfe9f.log
