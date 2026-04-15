@@ -16,7 +16,7 @@ Tài liệu này hướng dẫn từ lúc tải source code từ Git đến khi 
 ## 2) Tải source code
 
 ```bash
-git clone https://github.com/nhacedm69/attendance_app.git
+git clone https://github.com/dotuanlong2004/attendance_app.git
 cd attendance_app
 ```
 
