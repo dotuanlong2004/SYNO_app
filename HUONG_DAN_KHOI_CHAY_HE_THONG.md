@@ -24,7 +24,8 @@ Sau khi clone, cấu trúc chính:
 
 - `backend/` -> API Node.js + PostgreSQL
 - `attendance_app/` -> Flutter app
-- `flutter-sdk/` -> Flutter SDK nội bộ (nếu đã có trong repo local)
+
+Lưu ý: repo hiện đang ignore thư mục `flutter-sdk/`, vì vậy sau khi clone bạn cần cài Flutter SDK trên máy hoặc đặt sẵn một bản SDK local rồi chỉnh đường dẫn lệnh cho phù hợp.
 
 ## 3) Cấu hình Backend
 
@@ -69,6 +70,13 @@ Mở terminal mới:
 
 ```bash
 cd attendance_app
+flutter pub get
+flutter config --enable-web
+```
+
+Nếu bạn dùng SDK local (không thêm vào PATH), thay `flutter` bằng đường dẫn đầy đủ, ví dụ:
+
+```bash
 ..\flutter-sdk\bin\flutter.bat pub get
 ..\flutter-sdk\bin\flutter.bat config --enable-web
 ```
@@ -76,13 +84,13 @@ cd attendance_app
 ## 5) Chạy để test trên Web
 
 ```bash
-..\flutter-sdk\bin\flutter.bat run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:3000
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:3000
 ```
 
 ## 6) Chạy để test trên Windows Desktop
 
 ```bash
-..\flutter-sdk\bin\flutter.bat run -d windows --dart-define=API_BASE_URL=http://127.0.0.1:3000
+flutter run -d windows --dart-define=API_BASE_URL=http://127.0.0.1:3000
 ```
 
 ## 7) Tài khoản test nhanh
@@ -111,7 +119,7 @@ cd attendance_app
   - Họ tên
   - Email/SĐT
   - Mật khẩu
-  - Mã liên kết học sinh (ví dụ: `LK-HS001` hoặc mã đã cấp trong danh sách học sinh)
+  - Mã liên kết học sinh (ví dụ: `LK-HS001`, `LK-HS002` hoặc mã được giáo viên cấp)
 - Sau khi đăng ký thành công hệ thống tự đăng nhập và chuyển vào Dashboard.
 
 ### 8.3 Kiểm tra API nhanh (tùy chọn)
@@ -128,7 +136,7 @@ cd attendance_app
 - **Lỗi không kết nối API (`connection refused`)**
   - Kiểm tra backend đã chạy chưa, đúng cổng chưa.
 - **Flutter Windows lỗi build/link**
-  - Chạy `..\flutter-sdk\bin\flutter.bat clean`
+  - Chạy `flutter clean`
   - Chạy lại `pub get` rồi `run -d windows`
 - **Không thấy dữ liệu**
   - Chạy lại các lệnh seed ở mục 3.2.
@@ -140,7 +148,7 @@ cd attendance_app
 Trong `attendance_app/`:
 
 ```bash
-..\flutter-sdk\bin\flutter.bat analyze
+flutter analyze
 ```
 
 Trong `backend/`:
@@ -152,3 +160,15 @@ npm run db:setup
 ---
 
 Nếu cần chạy cho nhiều người test cùng lúc trong mạng LAN, có thể đổi `API_BASE_URL` sang IP nội bộ của máy chạy backend (ví dụ `http://192.168.x.x:3000`).
+
+## 11) Link demo tạm thời (public)
+
+Trong phiên làm việc hiện tại đã mở demo public bằng tunnel:
+
+- Frontend Web: `https://wide-cups-fry.loca.lt`
+- Backend API: `https://tough-bats-grab.loca.lt`
+
+Lưu ý:
+
+- Đây là link tạm thời, sẽ đổi hoặc ngắt khi tắt terminal/tunnel.
+- Nếu link hết hạn, chạy lại các bước tunnel ở mục 5 và 6 để tạo link mới.

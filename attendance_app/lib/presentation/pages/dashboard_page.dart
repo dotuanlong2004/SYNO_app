@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/attendance_record.dart';
-import 'students_admin_page.dart';
+import 'admin_student_management_page.dart';
 import 'timetable_page.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/attendance_card.dart';
@@ -68,7 +68,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               ? () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute<void>(
-                                      builder: (_) => const StudentsAdminPage(),
+                                      builder: (_) =>
+                                          const AdminStudentManagementPage(),
                                     ),
                                   );
                                 }
@@ -101,7 +102,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         ? () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) => const StudentsAdminPage(),
+                                builder: (_) =>
+                                    const AdminStudentManagementPage(),
                               ),
                             );
                           }

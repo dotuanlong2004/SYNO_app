@@ -7,6 +7,8 @@ const { getPool } = require('./config/database');
 const { getRedis, quitRedis } = require('./config/redis');
 const { mobileRouter } = require('./routes/mobile');
 const { authRouter } = require('./routes/auth');
+const { adminRouter } = require('./routes/admin');
+const { studentsRouter } = require('./routes/students');
 const { usersRouter } = require('./routes/users');
 const { initializeFirebaseAdmin } = require('./config/firebaseAdmin');
 
@@ -45,6 +47,8 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/mobile', mobileRouter);
+app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1', studentsRouter);
 app.use('/api/v1/users', usersRouter);
 
 const hardwareEnabled = process.env.ENABLE_HARDWARE_ROUTE !== 'false';
@@ -72,7 +76,8 @@ const server = app.listen(port, () => {
   console.log('Mobile logs: GET /api/v1/mobile/attendance/logs?limit=50');
   console.log('Mobile logs alias: GET /api/v1/mobile/attendance-logs?limit=50');
   console.log('Timetable: GET /api/v1/mobile/timetable');
-  console.log('Students (teacher/admin): GET /api/v1/mobile/students');
+  console.log('Students (teacher/admin): GET /api/v1/students');
+  console.log('Provision parent (teacher/admin): POST /api/v1/admin/provision-parent');
   console.log('Users FCM: POST /api/v1/users/fcm-token');
   if (!queueEnabled) {
     console.log('Attendance queue disabled (ENABLE_ATTENDANCE_QUEUE=false)');

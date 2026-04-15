@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
-import 'parent_registration_page.dart';
 import '../providers/dashboard_providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -134,20 +133,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   ),
                                 )
                               : const Text('Login'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _submitting
-                              ? null
-                              : () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          const ParentRegistrationPage(),
-                                    ),
-                                  );
-                                },
-                          child: const Text('Đăng ký tài khoản phụ huynh'),
                         ),
                         const SizedBox(height: 10),
                         Text(
