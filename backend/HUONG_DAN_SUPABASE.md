@@ -16,14 +16,20 @@ Hệ thống đã được migrate từ PostgreSQL local + Redis + BullMQ sang *
 
 ## Biến Môi Trường (.env)
 
+Lấy giá trị tại:
+- `SUPABASE_URL`: Supabase Dashboard -> **Settings -> API -> Project URL**
+- `SUPABASE_ANON_KEY`: Supabase Dashboard -> **Settings -> API -> anon/publishable key**
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase Dashboard -> **Settings -> API -> service_role key** (chỉ backend dùng, không commit)
+- `SUPABASE_DB_URL`: Supabase Dashboard -> **Settings -> Database -> Connection string (URI)**
+
 ```env
 # Supabase (BẮT BUỘC)
-SUPABASE_URL="ghi hướng dẫn thôi"
-SUPABASE_SERVICE_ROLE_KEY="ghi hướng dẫn thôi"
-SUPABASE_ANON_KEY="ghi hướng dẫn thôi"
+SUPABASE_URL="https://<project-ref>.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="<paste-service-role-key-here>"
+SUPABASE_ANON_KEY="<paste-anon-or-publishable-key-here>"
 
-# Direct DB URL cho pg-boss (lấy từ Supabase Dashboard > Settings > Database)
-SUPABASE_DB_URL="ghi hướng dẫn thôi"
+# Direct DB URL cho pg-boss
+SUPABASE_DB_URL="postgresql://postgres:<db-password>@db.<project-ref>.supabase.co:5432/postgres"
 
 # JWT (giữ nguyên)
 JWT_SECRET=your_jwt_secret_here
