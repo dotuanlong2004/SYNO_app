@@ -18,12 +18,12 @@ Hệ thống đã được migrate từ PostgreSQL local + Redis + BullMQ sang *
 
 ```env
 # Supabase (BẮT BUỘC)
-SUPABASE_URL=https://bimepdqcwpsynjimvenn.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<your-supabase-service-role-key>
-SUPABASE_ANON_KEY=<your-supabase-anon-key>
+SUPABASE_URL="ghi hướng dẫn thôi"
+SUPABASE_SERVICE_ROLE_KEY="ghi hướng dẫn thôi"
+SUPABASE_ANON_KEY="ghi hướng dẫn thôi"
 
 # Direct DB URL cho pg-boss (lấy từ Supabase Dashboard > Settings > Database)
-SUPABASE_DB_URL=postgresql://postgres:[password]@db.bimepdqcwpsynjimvenn.supabase.co:5432/postgres
+SUPABASE_DB_URL="ghi hướng dẫn thôi"
 
 # JWT (giữ nguyên)
 JWT_SECRET=your_jwt_secret_here

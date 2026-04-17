@@ -3,6 +3,13 @@ build/
 .dart_tool/
 flutter-sdk/
 .env
+.env.*
+**/.env
+**/.env.*
+*.env
+*.env.*
+!.env.example
+!**/.env.example
 *.log
 ios/Pods/
 android/.gradle/
