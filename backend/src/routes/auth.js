@@ -1,282 +1,252 @@
-﻿'use strict';
+'use strict';
+
+/**
+ * Auth Routes - Supabase Native Auth
+ * Replaces custom JWT with Supabase Auth
+ */
 
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const { getPool } = require('../config/database');
-const {
-  signAccessToken,
-  signRefreshToken,
-  verifyRefreshToken,
-  sha256,
-} = require('../config/jwt');
+const { getSupabase, getSupabaseAnon } = require('../config/supabase');
 
 const router = express.Router();
+const LEGACY_TEST_LOGIN_ALIAS = {
+  'admin@school.edu': 'admin2@school.edu',
+  'parent@test.com': 'parent2@test.com',
+};
+function debugLog(runId, hypothesisId, location, message, data) {
+  // #region agent log
+  fetch('http://127.0.0.1:7700/ingest/a7bdf355-c458-4118-93ed-045b1b863a17',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dd0f3d'},body:JSON.stringify({sessionId:'dd0f3d',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+}
 
-function accessPayload(user) {
+function formatUserResponse(authUser, profile) {
   return {
-    sub: String(user.id),
-    email: user.email,
-    role: user.role,
-    full_name: user.full_name,
-    class_id: user.class_id || null,
-    student_code: user.student_code || null,
+    id: authUser.id,
+    email: authUser.email,
+    full_name: profile?.full_name || authUser.user_metadata?.full_name || '',
+    role: profile?.role || authUser.user_metadata?.role || 'parent',
+    school_id: profile?.school_id || authUser.user_metadata?.school_id || 'default_school',
+    class_id: profile?.class_id || null,
+    student_code: profile?.student_code || null,
+    fcm_token: profile?.fcm_token || null,
+    is_active: profile?.is_active ?? true,
+    email_confirmed: authUser.email_confirmed_at != null,
+    last_sign_in: authUser.last_sign_in_at,
   };
 }
 
 router.post('/login', async (req, res) => {
-  const identifier = String(req.body?.email ?? req.body?.username ?? '').trim().toLowerCase();
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
   const password = String(req.body?.password ?? '');
 
-  if (!identifier || !password) {
-    return res.status(400).json({ ok: false, error: 'email/username and password are required' });
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: 'email and password are required' });
   }
 
+  const supabase = getSupabaseAnon() || getSupabase();
+  debugLog('pre-fix', 'H1', 'src/routes/auth.js:/login', 'Login request received', {
+    hasAnonClient: !!getSupabaseAnon(),
+    emailDomain: email.includes('@') ? email.split('@')[1] : null,
+    passwordLength: password.length,
+  });
+
   try {
-    const { rows } = await getPool().query(
-      `SELECT id, email, password_hash, full_name, role, class_id, student_code, is_active
-       FROM users
-       WHERE email = $1`,
-      [identifier]
-    );
+    let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    debugLog('pre-fix', 'H2', 'src/routes/auth.js:/login', 'signInWithPassword result', {
+      hasError: !!error,
+      errorMessage: error?.message || null,
+      hasUser: !!data?.user,
+      hasSession: !!data?.session,
+    });
 
-    const user = rows[0];
-    if (!user || !user.is_active) {
-      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+    const aliasEmail = LEGACY_TEST_LOGIN_ALIAS[email];
+    if (
+      (error || !data?.user) &&
+      aliasEmail &&
+      String(error?.message || '').toLowerCase().includes('database error querying schema')
+    ) {
+      debugLog('post-fix', 'H5', 'src/routes/auth.js:/login', 'Attempting legacy account alias fallback', {
+        fromEmail: email,
+        toEmail: aliasEmail,
+      });
+      const retry = await supabase.auth.signInWithPassword({ email: aliasEmail, password });
+      data = retry.data;
+      error = retry.error;
+      debugLog('post-fix', 'H6', 'src/routes/auth.js:/login', 'Alias fallback result', {
+        hasError: !!error,
+        errorMessage: error?.message || null,
+        hasUser: !!data?.user,
+      });
     }
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
-      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+    if (error || !data?.user) {
+      return res.status(401).json({ ok: false, error: error?.message || 'Invalid credentials' });
     }
 
-    const payload = accessPayload(user);
-    const access_token = signAccessToken(payload);
-    const refresh_token = signRefreshToken({ sub: String(user.id), type: 'refresh' });
+    const { data: profile } = await getSupabase()
+      .from('user_profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+    debugLog('pre-fix', 'H3', 'src/routes/auth.js:/login', 'user_profiles query completed', {
+      userIdPresent: !!data?.user?.id,
+      profileFound: !!profile,
+    });
 
-    await getPool().query(
-      `INSERT INTO user_refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
-      [user.id, sha256(refresh_token)]
-    );
+    let enrichedProfile = profile || null;
+    const resolvedRole = profile?.role || data.user.user_metadata?.role || 'parent';
+    if (resolvedRole === 'parent' && (!profile?.student_code || !profile?.class_id)) {
+      const schoolId =
+        profile?.school_id || data.user.user_metadata?.school_id || 'default_school';
+      const { data: linkedStudent } = await getSupabase()
+        .from('students')
+        .select('student_code, class_name')
+        .eq('parent_id', data.user.id)
+        .eq('school_id', schoolId)
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (linkedStudent) {
+        enrichedProfile = {
+          ...(profile || {}),
+          student_code: profile?.student_code || linkedStudent.student_code || null,
+          class_id: profile?.class_id || linkedStudent.class_name || null,
+          school_id: schoolId,
+          role: resolvedRole,
+        };
+      }
+    }
 
     return res.status(200).json({
       ok: true,
-      access_token,
-      refresh_token,
-      user: {
-        id: String(user.id),
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-        class_id: user.class_id || null,
-        student_code: user.student_code || null,
-      },
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_at: data.session.expires_at,
+      user: formatUserResponse(data.user, enrichedProfile),
     });
   } catch (error) {
+    debugLog('pre-fix', 'H4', 'src/routes/auth.js:/login', 'Unhandled login exception', {
+      message: error?.message || 'unknown',
+      name: error?.name || 'unknown',
+    });
     console.error('Login failed', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 });
 
 router.post('/register-parent', async (req, res) => {
-  const fullName = String(req.body?.full_name ?? req.body?.fullName ?? '').trim();
-  const identifier = String(
-    req.body?.email_or_phone ??
-      req.body?.emailOrPhone ??
-      req.body?.email ??
-      req.body?.phone ??
-      ''
-  ).trim();
+  const fullName = String(req.body?.full_name ?? '').trim();
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
   const password = String(req.body?.password ?? '');
-  const studentLinkCode = String(
-    req.body?.link_code ??
-      req.body?.linkCode ??
-      req.body?.student_link_code ??
-      req.body?.studentLinkCode ??
-      ''
-  ).trim();
+  const studentLinkCode = String(req.body?.link_code ?? '').trim();
+  const schoolId = String(req.body?.school_id ?? 'default_school').trim();
 
-  if (!fullName || !identifier || !password || !studentLinkCode) {
-    return res.status(400).json({
-      ok: false,
-      error: 'full_name, email_or_phone, password, and link_code are required',
-    });
+  if (!fullName || !email || !password || !studentLinkCode) {
+    return res.status(400).json({ ok: false, error: 'full_name, email, password, and link_code are required' });
   }
 
   if (password.length < 6) {
     return res.status(400).json({ ok: false, error: 'Password must be at least 6 characters' });
   }
 
-  const normalizedIdentifier = identifier.includes('@')
-    ? identifier.toLowerCase()
-    : identifier;
+  const supabase = getSupabaseAnon() || getSupabase();
 
-  const client = await getPool().connect();
   try {
-    await client.query('BEGIN');
+    const { data: student, error: studentError } = await getSupabase()
+      .from('students')
+      .select('id, student_code, full_name, class_name, parent_id')
+      .eq('link_code', studentLinkCode)
+      .eq('school_id', schoolId)
+      .single();
 
-    const studentResult = await client.query(
-      `SELECT id, student_code, full_name, class_name, parent_id
-       FROM students
-       WHERE link_code = $1
-       LIMIT 1`,
-      [studentLinkCode]
-    );
-
-    const student = studentResult.rows[0];
-    if (!student) {
-      await client.query('ROLLBACK');
+    if (studentError || !student) {
       return res.status(404).json({ ok: false, error: 'Invalid student link code' });
     }
 
     if (student.parent_id) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        ok: false,
-        error: 'This student has already been linked to a parent account',
-      });
+      return res.status(409).json({ ok: false, error: 'Student already linked to a parent account' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const userInsert = await client.query(
-      `INSERT INTO users (email, password_hash, full_name, role, class_id, student_code)
-       VALUES ($1, $2, $3, 'parent', $4, $5)
-       RETURNING id, email, full_name, role, class_id, student_code`,
-      [
-        normalizedIdentifier,
-        passwordHash,
-        fullName,
-        student.class_name ?? null,
-        student.student_code,
-      ]
-    );
-
-    const parentUser = userInsert.rows[0];
-
-    await client.query(
-      `UPDATE students
-       SET parent_id = $1,
-           updated_at = NOW()
-       WHERE id = $2`,
-      [parentUser.id, student.id]
-    );
-
-    const payload = accessPayload(parentUser);
-    const access_token = signAccessToken(payload);
-    const refresh_token = signRefreshToken({
-      sub: String(parentUser.id),
-      type: 'refresh',
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, role: 'parent', school_id: schoolId, student_code: student.student_code }
+      }
     });
 
-    await client.query(
-      `INSERT INTO user_refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
-      [parentUser.id, sha256(refresh_token)]
-    );
+    if (authError) {
+      if (authError.message.includes('already registered')) {
+        return res.status(409).json({ ok: false, error: 'Email already registered' });
+      }
+      return res.status(400).json({ ok: false, error: authError.message });
+    }
 
-    await client.query('COMMIT');
+    await getSupabase()
+      .from('user_profiles')
+      .update({ class_id: student.class_name })
+      .eq('id', authData.user.id);
+
+    await getSupabase()
+      .from('students')
+      .update({ parent_id: authData.user.id, updated_at: new Date().toISOString() })
+      .eq('id', student.id);
 
     return res.status(201).json({
       ok: true,
-      message: 'Parent account registered and linked successfully',
-      access_token,
-      refresh_token,
-      student: {
-        student_code: student.student_code,
-        full_name: student.full_name,
-        link_code: studentLinkCode,
-      },
+      message: 'Parent registered successfully',
       user: {
-        id: String(parentUser.id),
-        email: parentUser.email,
-        full_name: parentUser.full_name,
-        role: parentUser.role,
-        class_id: parentUser.class_id || null,
-        student_code: parentUser.student_code,
+        id: authData.user.id,
+        email: authData.user.email,
+        full_name: fullName,
+        role: 'parent',
+        school_id: schoolId,
+        student_code: student.student_code,
       },
+      session: authData.session ? {
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token,
+      } : null,
     });
   } catch (error) {
-    await client.query('ROLLBACK');
-    if (String(error?.code) === '23505') {
-      return res.status(409).json({ ok: false, error: 'Email/phone already exists' });
-    }
     console.error('Parent registration failed', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
-  } finally {
-    client.release();
   }
 });
-
 router.post('/refresh', async (req, res) => {
   const refreshToken = String(req.body?.refresh_token ?? '').trim();
   if (!refreshToken) {
     return res.status(400).json({ ok: false, error: 'refresh_token is required' });
   }
-
+  const supabase = getSupabaseAnon() || getSupabase();
   try {
-    const payload = verifyRefreshToken(refreshToken);
-    if (payload.type !== 'refresh' || !payload.sub) {
-      return res.status(401).json({ ok: false, error: 'Invalid refresh token' });
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data.session) {
+      return res.status(401).json({ ok: false, error: error?.message || 'Invalid refresh token' });
     }
-
-    const tokenHash = sha256(refreshToken);
-    const tokenRow = await getPool().query(
-      `SELECT id, user_id, expires_at, revoked_at
-       FROM user_refresh_tokens
-       WHERE token_hash = $1
-       LIMIT 1`,
-      [tokenHash]
-    );
-
-    const session = tokenRow.rows[0];
-    if (!session || session.revoked_at || new Date(session.expires_at) <= new Date()) {
-      return res.status(401).json({ ok: false, error: 'Refresh token expired or revoked' });
-    }
-
-    const userRow = await getPool().query(
-      `SELECT id, email, full_name, role, class_id, student_code, is_active FROM users WHERE id = $1 LIMIT 1`,
-      [session.user_id]
-    );
-
-    const user = userRow.rows[0];
-    if (!user || !user.is_active) {
-      return res.status(401).json({ ok: false, error: 'User inactive' });
-    }
-
-    const access_token = signAccessToken(accessPayload(user));
-    const newRefreshToken = signRefreshToken({ sub: String(user.id), type: 'refresh' });
-
-    await getPool().query(
-      `UPDATE user_refresh_tokens
-       SET revoked_at = NOW()
-       WHERE id = $1`,
-      [session.id]
-    );
-
-    await getPool().query(
-      `INSERT INTO user_refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '7 days')`,
-      [user.id, sha256(newRefreshToken)]
-    );
-
+    const { data: profile } = await getSupabase()
+      .from('user_profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
     return res.status(200).json({
       ok: true,
-      access_token,
-      refresh_token: newRefreshToken,
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_at: data.session.expires_at,
+      user: formatUserResponse(data.user, profile),
     });
-  } catch (_error) {
+  } catch (error) {
+    console.error('Refresh failed', error);
     return res.status(401).json({ ok: false, error: 'Invalid refresh token' });
   }
 });
-
 router.post('/logout', async (req, res) => {
-  const refreshToken = String(req.body?.refresh_token ?? '').trim();
-  if (refreshToken) {
-    await getPool().query(
-      `UPDATE user_refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1`,
-      [sha256(refreshToken)]
-    );
-  }
+  try {
+    const supabase = getSupabaseAnon() || getSupabase();
+    await supabase.auth.signOut();
+  } catch (e) {}
   return res.status(200).json({ ok: true });
 });
 

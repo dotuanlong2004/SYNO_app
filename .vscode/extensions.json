@@ -1,0 +1,6 @@
+{
+  "unwantedRecommendations": [
+    "asf.apache-netbeans-java",
+    "Oracle.oracle-java"
+  ]
+}

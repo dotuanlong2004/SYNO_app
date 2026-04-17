@@ -1,155 +1,213 @@
 ﻿'use strict';
 
-const { Worker } = require('bullmq');
+/**
+ * Attendance Worker - pg-boss + Supabase edition
+ * Replaces BullMQ Worker with pg-boss work queue
+ */
+
 const { DateTime } = require('luxon');
-const { createBullConnection } = require('../config/redis');
-const { getPool } = require('../config/database');
+const { getSupabase } = require('../config/supabase');
 const { classifyAttendance } = require('../services/attendanceLogic');
-const { QUEUE_NAME } = require('../queues/attendanceQueue');
+const { subscribeToQueue } = require('../queues/attendanceQueue');
 const { sendPushNotification, isUnregisteredTokenError } = require('../config/firebaseAdmin');
 
 const TZ = process.env.ATTENDANCE_TIMEZONE || 'Asia/Ho_Chi_Minh';
 
 function buildBody(studentCode, scannedAtIso, classification) {
-  const localTime = DateTime.fromISO(scannedAtIso, { zone: 'utc' })
-    .setZone(TZ)
-    .toFormat('HH:mm');
+    const localTime = DateTime.fromISO(scannedAtIso, { zone: 'utc' })
+        .setZone(TZ)
+        .toFormat('HH:mm');
 
-  if (classification.log_type === 'check_out') {
-    return `Học sinh ${studentCode} đã check-out lúc ${localTime}.`;
-  }
+    if (classification.log_type === 'check_out') {
+        return `Học sinh ${studentCode} đã check-out lúc ${localTime}.`;
+    }
 
-  if (classification.status_detail === 'late') {
-    return `Học sinh ${studentCode} đã check-in lúc ${localTime} (Đi muộn ${classification.late_minutes} phút).`;
-  }
+    if (classification.status_detail === 'late') {
+        return `Học sinh ${studentCode} đã check-in lúc ${localTime} (Đi muộn ${classification.late_minutes} phút).`;
+    }
 
-  return `Học sinh ${studentCode} đã check-in lúc ${localTime} (Đúng giờ).`;
+    return `Học sinh ${studentCode} đã check-in lúc ${localTime} (Đúng giờ).`;
 }
 
 async function clearInvalidFcmToken(userId) {
-  await getPool().query(
-    `UPDATE users
-     SET fcm_token = NULL,
-         updated_at = NOW()
-     WHERE id = $1`,
-    [userId]
-  );
+    const supabase = getSupabase();
+    await supabase
+        .from('users')
+        .update({ fcm_token: null, updated_at: new Date().toISOString() })
+        .eq('id', userId);
 }
 
-async function notifyUsers(studentCode, scannedAtIso, classification) {
-  const { rows } = await getPool().query(
-    `SELECT id, fcm_token
-     FROM users
-     WHERE is_active = TRUE
-       AND student_code = $1
-       AND fcm_token IS NOT NULL
-       AND fcm_token <> ''`,
-    [studentCode]
-  );
+async function notifyUsers(studentCode, scannedAtIso, classification, schoolId) {
+    const supabase = getSupabase();
 
-  if (!rows.length) {
-    return;
-  }
+    // Use RPC function or direct query
+    const { data: users, error } = await supabase
+        .from('users')
+        .select('id, fcm_token')
+        .eq('is_active', true)
+        .eq('school_id', schoolId)
+        .eq('student_code', studentCode)
+        .not('fcm_token', 'is', null);
 
-  const title = 'Thông báo điểm danh';
-  const body = buildBody(studentCode, scannedAtIso, classification);
+    if (error || !users?.length) {
+        return;
+    }
 
-  await Promise.all(
-    rows.map(async (user) => {
-      try {
-        await sendPushNotification({
-          token: user.fcm_token,
-          title,
-          body,
-          data: {
-            student_id: studentCode,
-            log_type: classification.log_type,
-            status: classification.status_detail,
-            late_minutes: String(classification.late_minutes ?? 0),
-            scanned_at: scannedAtIso,
-          },
-        });
-      } catch (error) {
-        if (isUnregisteredTokenError(error)) {
-          await clearInvalidFcmToken(user.id);
-          console.warn('[fcm] Cleared invalid token for user', user.id);
-          return;
-        }
+    const title = 'Thông báo điểm danh';
+    const body = buildBody(studentCode, scannedAtIso, classification);
 
-        console.error('[fcm] send failed for user', user.id, error.message);
-      }
-    })
-  );
+    await Promise.all(
+        users.map(async (user) => {
+            if (!user.fcm_token) return;
+            try {
+                await sendPushNotification({
+                    token: user.fcm_token,
+                    title,
+                    body,
+                    data: {
+                        student_id: studentCode,
+                        log_type: classification.log_type,
+                        status: classification.status_detail,
+                        late_minutes: String(classification.late_minutes ?? 0),
+                        scanned_at: scannedAtIso,
+                    },
+                });
+            } catch (error) {
+                if (isUnregisteredTokenError(error)) {
+                    await clearInvalidFcmToken(user.id);
+                    console.warn('[fcm] Cleared invalid token for user', user.id);
+                    return;
+                }
+                console.error('[fcm] send failed for user', user.id, error.message);
+            }
+        })
+    );
 }
 
 /**
- * @param {import('bullmq').Job} job
+ * Process scan job from pg-boss
+ * @param {Object} job - pg-boss job object
  */
 async function processScan(job) {
-  const { studentCode, scannedAtIso } = job.data;
-  if (!studentCode || !scannedAtIso) {
-    throw new Error('Invalid job payload');
-  }
+    const { studentCode, scannedAtIso, schoolId: incomingSchoolId } = job.data;
+    if (!studentCode || !scannedAtIso) {
+        throw new Error('Invalid job payload');
+    }
 
-  const scannedAt = new Date(scannedAtIso);
-  const classification = classifyAttendance(scannedAt);
-  if (!classification) {
-    console.warn(
-      `[worker] Scan outside attendance window (timezone ${TZ}):`,
-      studentCode,
-      scannedAtIso
-    );
-    return { skipped: true, reason: 'outside_window' };
-  }
+    const scannedAt = new Date(scannedAtIso);
+    const classification = classifyAttendance(scannedAt);
+    if (!classification) {
+        console.warn(
+            `[worker] Scan outside attendance window (timezone ${TZ}):`,
+            studentCode,
+            scannedAtIso
+        );
+        return { skipped: true, reason: 'outside_window' };
+    }
 
-  const pool = getPool();
-  const defaultLinkCode = `LK-${studentCode}`;
+    const supabase = getSupabase();
+    const schoolId = String(incomingSchoolId || process.env.DEFAULT_SCHOOL_ID || 'default_school');
+    const defaultLinkCode = `LK-${studentCode}`;
 
-  const upsert = await pool.query(
-    `INSERT INTO students (student_code, full_name, link_code)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (student_code) DO UPDATE SET
-       link_code = COALESCE(students.link_code, EXCLUDED.link_code),
-       updated_at = NOW()
-     RETURNING id`,
-    [studentCode, 'Pending registration', defaultLinkCode]
-  );
-  const studentId = upsert.rows[0].id;
+    // Upsert student using RPC or direct query
+    const { data: student, error: studentError } = await supabase
+        .rpc('upsert_student_from_scan', {
+            p_school_id: schoolId,
+            p_student_code: studentCode,
+            p_full_name: 'Pending registration'
+        });
 
-  await pool.query(
-    `INSERT INTO attendance_logs (student_id, scanned_at, log_type, status_detail, late_minutes)
-     VALUES ($1, $2::timestamptz, $3, $4, $5)`,
-    [
-      studentId,
-      scannedAtIso,
-      classification.log_type,
-      classification.status_detail,
-      classification.late_minutes,
-    ]
-  );
+    if (studentError) {
+        // Fallback: manual upsert
+        const { data: existing } = await supabase
+            .from('students')
+            .select('id, link_code')
+            .eq('student_code', studentCode)
+            .maybeSingle();
 
-  await notifyUsers(studentCode, scannedAtIso, classification);
+        let studentId;
+        if (existing) {
+            studentId = existing.id;
+            if (!existing.link_code) {
+                await supabase
+                    .from('students')
+                    .update({ link_code: defaultLinkCode, updated_at: new Date().toISOString() })
+                    .eq('id', studentId);
+            }
+        } else {
+            const { data: inserted } = await supabase
+                .from('students')
+                .insert({
+                    school_id: schoolId,
+                    student_code: studentCode,
+                    full_name: 'Pending registration',
+                    link_code: defaultLinkCode
+                })
+                .select('id')
+                .single();
+            studentId = inserted.id;
+        }
 
-  return {
-    skipped: false,
-    studentId,
-    ...classification,
-  };
+        // Insert attendance log
+        await supabase
+            .from('attendance_logs')
+            .insert({
+                school_id: schoolId,
+                student_id: studentId,
+                scanned_at: scannedAtIso,
+                log_type: classification.log_type,
+                status_detail: classification.status_detail,
+                late_minutes: classification.late_minutes
+            });
+
+        await notifyUsers(studentCode, scannedAtIso, classification, schoolId);
+
+        return {
+            skipped: false,
+            studentId,
+            ...classification,
+        };
+    }
+
+    // RPC succeeded
+    const studentId = student?.student_id;
+
+    // Insert attendance log
+    await supabase
+        .from('attendance_logs')
+        .insert({
+            school_id: schoolId,
+            student_id: studentId,
+            scanned_at: scannedAtIso,
+            log_type: classification.log_type,
+            status_detail: classification.status_detail,
+            late_minutes: classification.late_minutes
+        });
+
+    await notifyUsers(studentCode, scannedAtIso, classification, schoolId);
+
+    return {
+        skipped: false,
+        studentId,
+        ...classification,
+    };
 }
 
-function createAttendanceWorker() {
-  const connection = createBullConnection();
+/**
+ * Create and start attendance worker with pg-boss
+ * @returns {Promise<Object>} - worker handle with close() method
+ */
+async function createAttendanceWorker() {
+    console.log('[worker] Starting pg-boss worker...');
 
-  const worker = new Worker(QUEUE_NAME, processScan, {
-    connection,
-    concurrency: Number(process.env.ATTENDANCE_WORKER_CONCURRENCY || 20),
-  });
+    await subscribeToQueue(processScan);
 
-  worker.on('failed', (job, err) => {
-    console.error('[worker] Job failed', job?.id, err.message);
-  });
-
-  return worker;
+    return {
+        async close() {
+            // pg-boss handles cleanup via boss.stop() in queue module
+            console.log('[worker] Worker shutting down...');
+        }
+    };
 }
 
 module.exports = { createAttendanceWorker, processScan };

@@ -16,13 +16,20 @@ class AttendanceRecordModel extends AttendanceRecord {
       _ => AttendanceStatus.onTime,
     };
 
+    int? parseNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse('$value');
+    }
+
     return AttendanceRecordModel(
       studentId: (json['student_id'] as String?) ?? 'UNKNOWN',
       timestamp:
           DateTime.tryParse((json['timestamp'] as String?) ?? '') ??
           DateTime.now(),
       status: status,
-      lateMinutes: json['late_minutes'] as int?,
+      lateMinutes: parseNullableInt(json['late_minutes']),
     );
   }
 }

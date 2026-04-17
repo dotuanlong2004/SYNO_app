@@ -10,6 +10,7 @@ async function main() {
   const plainPassword = process.env.SEED_USER_PASSWORD || 'Password@123';
   const fullName = process.env.SEED_USER_FULL_NAME || 'Default Teacher';
   const role = process.env.SEED_USER_ROLE || 'teacher';
+  const schoolId = process.env.SEED_SCHOOL_ID || 'default_school';
   const classId = process.env.SEED_USER_CLASS_ID || '12A1';
   const studentCode = process.env.SEED_USER_STUDENT_CODE || 'HS001';
 
@@ -17,21 +18,23 @@ async function main() {
 
   const pool = getPool();
   await pool.query(
-    `INSERT INTO users (email, password_hash, full_name, role, class_id, student_code)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO users (email, password_hash, full_name, role, school_id, class_id, student_code)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (email)
      DO UPDATE SET password_hash = EXCLUDED.password_hash,
                    full_name = EXCLUDED.full_name,
                    role = EXCLUDED.role,
+                   school_id = EXCLUDED.school_id,
                    class_id = EXCLUDED.class_id,
                    student_code = EXCLUDED.student_code,
                    updated_at = NOW()`,
-    [email, passwordHash, fullName, role, classId, studentCode]
+    [email, passwordHash, fullName, role, schoolId, classId, studentCode]
   );
 
   console.log('Seeded user:', {
     email,
     role,
+    schoolId,
     fullName,
     classId,
     studentCode,

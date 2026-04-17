@@ -1,8 +1,13 @@
 {
   "java.import.exclusions": [
     "**/flutter-sdk/**",
+    "**/flutter-sdk/dev/**",
+    "**/flutter-sdk/examples/**",
+    "**/flutter-sdk/**/android/**",
     "flutter-sdk/**",
     "**/attendance_app/build/**",
+    "**/attendance_app/android/**",
+    "**/.pub-cache/**",
     "**/attendance_app/.dart_tool/**",
     "**/node_modules/**",
     "**/.metadata/**",
@@ -10,21 +15,33 @@
     "**/META-INF/maven/**"
   ],
   "java.configuration.updateBuildConfiguration": "disabled",
+  "java.enabled": false,
   "java.import.gradle.enabled": false,
   "java.import.maven.enabled": false,
   "gradle.autoDetect": "off",
   "files.watcherExclude": {
     "**/flutter-sdk/**": true,
+    "**/flutter-sdk/dev/**": true,
+    "**/flutter-sdk/examples/**": true,
     "**/attendance_app/build/**": true,
+    "**/attendance_app/android/**": true,
+    "**/.pub-cache/**": true,
     "**/attendance_app/.dart_tool/**": true,
     "**/backend/node_modules/**": true
   },
   "search.exclude": {
     "**/flutter-sdk/**": true,
-    "**/backend/node_modules/**": true
+    "**/flutter-sdk/dev/**": true,
+    "**/flutter-sdk/examples/**": true,
+    "**/backend/node_modules/**": true,
+    "**/attendance_app/android/**": true,
+    "**/.pub-cache/**": true
   },
   "files.exclude": {
-    "**/flutter-sdk/**": true
+    "**/flutter-sdk/**": true,
+    "**/flutter-sdk/dev/**": true,
+    "**/flutter-sdk/examples/**": true,
+    "**/.pub-cache/**": true
   },
   "dart.analysisExcludedFolders": [
     "D:\\attendance_app_dev\\flutter-sdk",

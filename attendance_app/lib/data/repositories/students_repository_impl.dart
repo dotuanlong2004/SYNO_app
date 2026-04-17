@@ -14,15 +14,7 @@ class StudentsRepositoryImpl implements StudentsRepository {
   }
 
   @override
-  Future<ProvisionParentResult> provisionParent({
-    required int studentId,
-    required String parentName,
-    required String parentEmailOrPhone,
-  }) {
-    return _remoteDataSource.provisionParent(
-      studentId: studentId,
-      parentName: parentName,
-      parentEmailOrPhone: parentEmailOrPhone,
-    );
+  Future<ProvisionParentResult> provisionParent({required int studentId}) {
+    return _remoteDataSource.provisionParent(studentId: studentId);
   }
 }

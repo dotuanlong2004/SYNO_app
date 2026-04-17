@@ -3,6 +3,13 @@ build/
 .dart_tool/
 flutter-sdk/
 .env
+*.log
+ios/Pods/
+android/.gradle/
+pgdata/
+backend/pgdata/
+postgres-data/
+redis-data/
 
 backend/firebase-service-account.json
 zk-agent/agent-buffer.sqlite

@@ -13,8 +13,8 @@ class LoginPage extends ConsumerStatefulWidget {
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'teacher1@school.local');
-  final _passwordController = TextEditingController(text: 'Password@123');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _submitting = false;
 
   @override
@@ -133,12 +133,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   ),
                                 )
                               : const Text('Login'),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Demo user: teacher1@school.local / Password@123',
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),

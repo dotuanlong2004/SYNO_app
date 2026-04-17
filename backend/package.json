@@ -1,12 +1,14 @@
 {
   "name": "backend",
-  "version": "1.0.0",
-  "description": "Student attendance API — PostgreSQL + Redis queue",
+  "version": "2.0.0",
+  "description": "Student attendance API — Supabase + pg-boss queue",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "db:setup": "node scripts/db-setup.js",
+    "db:migrate": "node scripts/auto-migrate.js",
+    "db:setup": "node scripts/auto-migrate.js",
+    "db:auto": "node scripts/auto-migrate.js",
     "test": "echo \"No tests yet\" && exit 0",
     "db:seed-user": "node scripts/seed-user.js",
     "db:seed-attendance": "node scripts/seed-attendance.js",
@@ -18,16 +20,15 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "bullmq": "^5.73.5",
+    "@supabase/supabase-js": "^2.49.4",
+    "axios": "^1.15.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "firebase-admin": "^13.8.0",
     "helmet": "^8.1.0",
-    "ioredis": "^5.10.1",
-    "jsonwebtoken": "^9.0.3",
     "luxon": "^3.7.2",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "pg-boss": "^10.1.6"
   }
 }

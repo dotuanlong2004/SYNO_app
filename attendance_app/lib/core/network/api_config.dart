@@ -13,7 +13,7 @@ class ApiConfig {
     }
 
     if (kIsWeb) {
-      return 'http://localhost:3000';
+      return 'http://127.0.0.1:3000';
     }
 
     if (Platform.isAndroid) {

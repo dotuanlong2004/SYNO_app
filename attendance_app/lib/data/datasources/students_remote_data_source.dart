@@ -28,16 +28,10 @@ class StudentsRemoteDataSource {
 
   Future<ProvisionParentResult> provisionParent({
     required int studentId,
-    required String parentName,
-    required String parentEmailOrPhone,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/admin/provision-parent',
-      data: {
-        'student_id': studentId,
-        'parent_name': parentName,
-        'parent_email_or_phone': parentEmailOrPhone,
-      },
+      data: {'student_id': studentId},
     );
 
     final data = response.data ?? <String, dynamic>{};

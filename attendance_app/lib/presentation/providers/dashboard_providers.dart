@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,8 @@ import '../../data/auth/auth_api.dart';
 import '../../data/auth/token_session.dart';
 import '../../data/auth/token_storage.dart';
 import '../../data/datasources/attendance_remote_data_source.dart';
+import '../../data/datasources/fees_remote_data_source.dart';
+import '../../data/datasources/parent_features_remote_data_source.dart';
 import '../../data/datasources/students_remote_data_source.dart';
 import '../../data/datasources/timetable_remote_data_source.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
@@ -21,6 +24,10 @@ import '../../domain/auth/login_result.dart';
 import '../../domain/auth/parent_registration_result.dart';
 import '../../domain/auth/token_pair.dart';
 import '../../domain/entities/attendance_record.dart';
+import '../../domain/entities/announcement_item.dart';
+import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/fee_notice.dart';
+import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/student_link_info.dart';
 import '../../domain/entities/timetable_entry.dart';
 import '../../domain/repositories/attendance_repository.dart';
@@ -42,8 +49,6 @@ final authControllerProvider = NotifierProvider<AuthController, AuthState>(
 );
 
 class AuthController extends Notifier<AuthState> {
-  static const String _demoEmail = 'teacher1@school.local';
-  static const String _demoPassword = 'Password@123';
   bool _initialized = false;
 
   @override
@@ -66,9 +71,30 @@ class AuthController extends Notifier<AuthState> {
     }
 
     await ref.read(tokenSessionProvider).set(stored);
-    state = const AuthState.authenticated(
-      AuthUser(id: '', email: '', fullName: '', role: ''),
-    );
+    final restoredUser = _userFromAccessToken(stored.accessToken);
+    state = AuthState.authenticated(restoredUser);
+  }
+
+  AuthUser _userFromAccessToken(String accessToken) {
+    try {
+      final parts = accessToken.split('.');
+      if (parts.length != 3) {
+        return const AuthUser(id: '', email: '', fullName: '', role: 'UNKNOWN');
+      }
+
+      final payloadBytes = base64Url.decode(base64Url.normalize(parts[1]));
+      final payload =
+          jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
+
+      return AuthUser(
+        id: '${payload['sub'] ?? ''}',
+        email: '${payload['email'] ?? ''}',
+        fullName: '${payload['full_name'] ?? ''}',
+        role: '${payload['role'] ?? payload['user_role'] ?? 'UNKNOWN'}',
+      );
+    } catch (_) {
+      return const AuthUser(id: '', email: '', fullName: '', role: 'UNKNOWN');
+    }
   }
 
   Future<bool> signIn({required String email, required String password}) async {
@@ -78,26 +104,9 @@ class AuthController extends Notifier<AuthState> {
           .login(email: email, password: password);
       await _persistTokens(result.tokens);
       state = AuthState.authenticated(result.user);
+      await _syncFcmTokenAfterAuth();
       return true;
     } catch (error) {
-      if (_shouldUseOfflineDemoLogin(email, password, error)) {
-        final demoResult = LoginResult(
-          user: const AuthUser(
-            id: 'demo-teacher-1',
-            email: _demoEmail,
-            fullName: 'Demo Teacher',
-            role: 'teacher',
-          ),
-          tokens: const TokenPair(
-            accessToken: 'offline-demo-access-token',
-            refreshToken: 'offline-demo-refresh-token',
-          ),
-        );
-        await _persistTokens(demoResult.tokens);
-        state = AuthState.authenticated(demoResult.user);
-        return true;
-      }
-
       state = AuthState.unauthenticated(_buildSignInErrorMessage(error));
       return false;
     }
@@ -119,13 +128,16 @@ class AuthController extends Notifier<AuthState> {
         );
     await _persistTokens(result.loginResult.tokens);
     state = AuthState.authenticated(result.loginResult.user);
+    await _syncFcmTokenAfterAuth();
     return result;
   }
 
-  bool _shouldUseOfflineDemoLogin(String email, String password, Object error) {
-    return email.trim().toLowerCase() == _demoEmail &&
-        password == _demoPassword &&
-        _isNetworkError(error);
+  Future<void> _syncFcmTokenAfterAuth() async {
+    try {
+      await ref.read(fcmServiceProvider).initialize();
+    } catch (_) {
+      // Ignore token sync failures to avoid blocking auth flow.
+    }
   }
 
   bool _isNetworkError(Object error) {
@@ -267,6 +279,62 @@ final timetableProvider = FutureProvider<List<TimetableEntry>>((ref) async {
   final repository = ref.watch(timetableRepositoryProvider);
   return repository.fetchTimetable();
 });
+
+final feesDataSourceProvider = Provider<FeesRemoteDataSource>((ref) {
+  final dio = ref.watch(dioProvider);
+  return FeesRemoteDataSource(dio: dio);
+});
+
+final feeNoticesProvider = FutureProvider<List<FeeNotice>>((ref) async {
+  final dataSource = ref.watch(feesDataSourceProvider);
+  return dataSource.fetchFeeNotices();
+});
+
+final parentFeaturesDataSourceProvider = Provider<ParentFeaturesRemoteDataSource>((ref) {
+  final dio = ref.watch(dioProvider);
+  return ParentFeaturesRemoteDataSource(dio: dio);
+});
+
+final announcementsProvider = FutureProvider<List<AnnouncementItem>>((ref) async {
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchAnnouncements();
+});
+
+final gradesProvider = FutureProvider<List<GradeRecord>>((ref) async {
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchGrades();
+});
+
+final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchChatMessages();
+});
+
+final chatComposerProvider = NotifierProvider<ChatComposerController, bool>(
+  ChatComposerController.new,
+);
+
+class ChatComposerController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  Future<void> sendMessage({
+    required String messageText,
+    String? studentCode,
+  }) async {
+    if (state) return;
+    state = true;
+    try {
+      await ref.read(parentFeaturesDataSourceProvider).sendChatMessage(
+        messageText: messageText,
+        studentCode: studentCode,
+      );
+      ref.invalidate(chatMessagesProvider);
+    } finally {
+      state = false;
+    }
+  }
+}
 
 final studentsDataSourceProvider = Provider<StudentsRemoteDataSource>((ref) {
   final dio = ref.watch(dioProvider);

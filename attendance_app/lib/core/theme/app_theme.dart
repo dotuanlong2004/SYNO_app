@@ -3,15 +3,17 @@ import 'package:flutter/material.dart';
 class AppTheme {
   const AppTheme._();
 
-  static const Color skyBlue = Color(0xFF4A90E2);
+  static const Color skyBlue = Color(0xFFF28C28);
+  static const Color primaryOrange = Color(0xFFF28C28);
+  static const Color primaryOrangeDark = Color(0xFFD97512);
   static const Color softWhite = Color(0xFFFFFFFF);
-  static const Color lightGrayBackground = Color(0xFFF4F7FB);
+  static const Color lightGrayBackground = Color(0xFFFFF7EE);
   static const Color mutedText = Color(0xFF5E6A7D);
 
   static ThemeData get light {
     const colorScheme = ColorScheme.light(
-      primary: skyBlue,
-      secondary: skyBlue,
+      primary: primaryOrange,
+      secondary: primaryOrangeDark,
       surface: softWhite,
       onPrimary: Colors.white,
       onSurface: Color(0xFF1A1F2E),

@@ -18,6 +18,17 @@ class AdminStudentManagementPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản lý học sinh & tài khoản phụ huynh'),
+        actions: <Widget>[
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.exit_to_app_rounded, color: Colors.white),
+            label: const Text(
+              'Thoát quản trị',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: studentsAsync.when(
         data: (students) {
@@ -115,75 +126,11 @@ class _StudentAdminCardState extends ConsumerState<_StudentAdminCard> {
   }
 
   Future<void> _openProvisionDialog() async {
-    final nameController = TextEditingController();
-    final contactController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
     try {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Cấp tài khoản phụ huynh'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Tên phụ huynh',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Vui lòng nhập tên phụ huynh';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: contactController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email/SĐT phụ huynh',
-                    prefixIcon: Icon(Icons.alternate_email_rounded),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Vui lòng nhập Email/SĐT';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.of(context).pop(true);
-                }
-              },
-              child: const Text('Cấp tài khoản'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true || !mounted) return;
       setState(() => _provisioning = true);
       final result = await ref
           .read(studentsRepositoryProvider)
-          .provisionParent(
-            studentId: widget.student.id,
-            parentName: nameController.text.trim(),
-            parentEmailOrPhone: contactController.text.trim(),
-          );
+          .provisionParent(studentId: widget.student.id);
       if (!mounted) return;
       await _showCredentialsDialog(result);
       ref.invalidate(studentsProvider);
@@ -202,8 +149,6 @@ class _StudentAdminCardState extends ConsumerState<_StudentAdminCard> {
         const SnackBar(content: Text('Đã xảy ra lỗi không xác định.')),
       );
     } finally {
-      nameController.dispose();
-      contactController.dispose();
       if (mounted) {
         setState(() => _provisioning = false);
       }

@@ -9,7 +9,7 @@ class TimetableRemoteDataSource {
 
   Future<List<TimetableEntryModel>> fetchTimetable() async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/mobile/timetable',
+      '/api/v1/timetable',
     );
     final data = response.data;
     if (data == null) {
