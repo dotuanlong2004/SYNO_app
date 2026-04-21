@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 
-const API_BASE = 'http://127.0.0.1:3000/api/v1';
+// Use Vite environment variables (VITE_ prefix required)
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
+const DEFAULT_SCHOOL_ID = import.meta.env.VITE_DEFAULT_SCHOOL_ID || 'default_school';
+const ADMIN_WEB_API = `${API_BASE}/admin-web`; // No auth required
 
 function App() {
   const [tab, setTab] = useState('students');
-  const [token, setToken] = useState('');
-  const [loginForm, setLoginForm] = useState({
-    email: 'admin1@school.local',
-    password: 'Password@123',
-  });
-  const [schoolId, setSchoolId] = useState('default_school');
+  // Admin web không cần token - bypass authentication
+  const [schoolId, setSchoolId] = useState(DEFAULT_SCHOOL_ID);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -21,6 +20,12 @@ function App() {
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [provisionResult, setProvisionResult] = useState(null);
+  const [parentForm, setParentForm] = useState({
+    parent_name: '',
+    parent_email: '',
+    parent_phone: '',
+    password: ''
+  });
   const [timetables, setTimetables] = useState([]);
   const [timetableForm, setTimetableForm] = useState({
     class_id: '',
@@ -45,6 +50,7 @@ function App() {
     paid_at: '',
   });
   const [editingFeeId, setEditingFeeId] = useState(null);
+  const [parents, setParents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
@@ -59,26 +65,39 @@ function App() {
     final_score: '0',
   });
 
+  // Load data khi mount component (không cần token)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokenFromApp = params.get('token');
-    const schoolFromApp = params.get('school_id');
-    if (tokenFromApp) {
-      setToken(tokenFromApp);
-      setMessage('Đã nhận phiên đăng nhập từ app.');
-    }
-    if (schoolFromApp) {
-      setSchoolId(schoolFromApp);
-    }
-  }, []);
+    setLoading(true);
+    setMessage('');
+    
+    Promise.all([
+      requestJson(`${ADMIN_WEB_API}/students`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/timetables`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/fees`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/announcements`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders })
+    ])
+      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson]) => {
+        setStudents(studentsJson.data || []);
+        setTimetables(timetablesJson.data || []);
+        setFees(feesJson.data || []);
+        setAnnouncements(announcementsJson.data || []);
+        setGrades(gradesJson.data || []);
+      })
+      .catch((error) => {
+        setMessage(error.message);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [schoolId]);
 
-  const authHeaders = useMemo(
+  const adminHeaders = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
       'x-school-id': schoolId,
     }),
-    [token, schoolId],
+    [schoolId],
   );
 
   async function requestJson(url, options = {}) {
@@ -88,7 +107,7 @@ function App() {
 
     if (!contentType.includes('application/json')) {
       throw new Error(
-        `API trả về không đúng định dạng JSON (HTTP ${response.status}). Hãy kiểm tra backend có đang chạy trên 127.0.0.1:3000.`,
+        `API ${url} trả về không đúng định dạng JSON (HTTP ${response.status}). Hãy kiểm tra backend có đang chạy.`,
       );
     }
 
@@ -96,29 +115,25 @@ function App() {
     try {
       json = JSON.parse(text);
     } catch {
-      throw new Error(`Phản hồi JSON không hợp lệ từ server (HTTP ${response.status}).`);
+      throw new Error(`Phản hồi JSON không hợp lệ từ ${url} (HTTP ${response.status}).`);
     }
 
     if (!response.ok) {
-      throw new Error(json.error || `Yêu cầu thất bại (HTTP ${response.status})`);
+      throw new Error(json.error || `Lỗi từ ${url} (HTTP ${response.status})`);
     }
     return json;
   }
 
   function ensureToken() {
-    if (!token) {
-      setMessage('Bạn chưa đăng nhập admin hoặc chưa có Bearer token.');
-      return false;
-    }
+    // Admin web bypass authentication - full access
     return true;
   }
 
   async function loadStudents() {
-    if (!ensureToken()) return;
     setLoading(true);
     setMessage('');
     try {
-      const json = await requestJson(`${API_BASE}/students`, { headers: authHeaders });
+      const json = await requestJson(`${ADMIN_WEB_API}/students`, { headers: adminHeaders });
       setStudents(json.data || []);
     } catch (error) {
       setMessage(error.message);
@@ -128,10 +143,9 @@ function App() {
   }
 
   async function loadTimetables() {
-    if (!ensureToken()) return;
     try {
-      const json = await requestJson(`${API_BASE}/admin/timetables`, {
-        headers: authHeaders,
+      const json = await requestJson(`${ADMIN_WEB_API}/timetables`, {
+        headers: adminHeaders,
       });
       setTimetables(json.data || []);
     } catch (error) {
@@ -140,10 +154,9 @@ function App() {
   }
 
   async function loadFees() {
-    if (!ensureToken()) return;
     try {
-      const json = await requestJson(`${API_BASE}/admin/fees`, {
-        headers: authHeaders,
+      const json = await requestJson(`${ADMIN_WEB_API}/fees`, {
+        headers: adminHeaders,
       });
       setFees(json.data || []);
     } catch (error) {
@@ -151,11 +164,21 @@ function App() {
     }
   }
 
-  async function loadAnnouncements() {
-    if (!ensureToken()) return;
+  async function loadParents() {
     try {
-      const json = await requestJson(`${API_BASE}/admin/announcements`, {
-        headers: authHeaders,
+      const json = await requestJson(`${ADMIN_WEB_API}/parents`, {
+        headers: adminHeaders,
+      });
+      setParents(json.data || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function loadAnnouncements() {
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/announcements`, {
+        headers: adminHeaders,
       });
       setAnnouncements(json.data || []);
     } catch (error) {
@@ -164,10 +187,9 @@ function App() {
   }
 
   async function loadGrades() {
-    if (!ensureToken()) return;
     try {
-      const json = await requestJson(`${API_BASE}/admin/grades`, {
-        headers: authHeaders,
+      const json = await requestJson(`${ADMIN_WEB_API}/grades`, {
+        headers: adminHeaders,
       });
       setGrades(json.data || []);
     } catch (error) {
@@ -175,64 +197,13 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    setMessage('');
-    requestJson(`${API_BASE}/students`, { headers: authHeaders })
-      .then((json) => {
-        setStudents(json.data || []);
-      })
-      .catch((error) => {
-        setMessage(error.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-    requestJson(`${API_BASE}/admin/timetables`, { headers: authHeaders })
-      .then((json) => setTimetables(json.data || []))
-      .catch((error) => setMessage(error.message));
-    requestJson(`${API_BASE}/admin/fees`, { headers: authHeaders })
-      .then((json) => setFees(json.data || []))
-      .catch((error) => setMessage(error.message));
-    requestJson(`${API_BASE}/admin/announcements`, { headers: authHeaders })
-      .then((json) => setAnnouncements(json.data || []))
-      .catch((error) => setMessage(error.message));
-    requestJson(`${API_BASE}/admin/grades`, { headers: authHeaders })
-      .then((json) => setGrades(json.data || []))
-      .catch((error) => setMessage(error.message));
-  }, [token, authHeaders]);
-
-  async function loginAdmin() {
-    setMessage('');
-    try {
-      const json = await requestJson(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-school-id': schoolId,
-        },
-        body: JSON.stringify({
-          email: loginForm.email,
-          password: loginForm.password,
-          school_id: schoolId,
-        }),
-      });
-      setToken(json.access_token || '');
-      setMessage('Đăng nhập thành công. Đã nạp token.');
-    } catch (error) {
-      setMessage(error.message);
-    }
-  }
-
   async function createStudent(event) {
     event.preventDefault();
-    if (!ensureToken()) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/students`, {
+      await requestJson(`${ADMIN_WEB_API}/students`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify(studentForm),
       });
       setStudentForm({ student_code: '', full_name: '', class_name: '' });
@@ -244,12 +215,12 @@ function App() {
 
   async function updateStudent(event) {
     event.preventDefault();
-    if (!ensureToken() || !editingStudentId) return;
+    if (!editingStudentId) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/students/${editingStudentId}`, {
+      await requestJson(`${ADMIN_WEB_API}/students/${editingStudentId}`, {
         method: 'PUT',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           full_name: studentForm.full_name,
           class_name: studentForm.class_name,
@@ -278,12 +249,11 @@ function App() {
   }
 
   async function deleteStudent(studentId) {
-    if (!ensureToken()) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/students/${studentId}`, {
+      await requestJson(`${ADMIN_WEB_API}/students/${studentId}`, {
         method: 'DELETE',
-        headers: authHeaders,
+        headers: adminHeaders,
       });
       await loadStudents();
     } catch (error) {
@@ -292,29 +262,38 @@ function App() {
   }
 
   async function provisionParent() {
-    if (!ensureToken()) return;
     setMessage('');
     setProvisionResult(null);
     try {
-      const json = await requestJson(`${API_BASE}/admin/provision-parent`, {
+      const body = {
+        student_id: Number(selectedStudentId),
+        ...parentForm
+      };
+      // Remove empty fields to use defaults
+      Object.keys(body).forEach(key => {
+        if (body[key] === '') delete body[key];
+      });
+      
+      const json = await requestJson(`${ADMIN_WEB_API}/provision-parent`, {
         method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ student_id: Number(selectedStudentId) }),
+        headers: adminHeaders,
+        body: JSON.stringify(body),
       });
       setProvisionResult(json);
-      await loadStudents();
+      setParentForm({ parent_name: '', parent_email: '', parent_phone: '', password: '' });
+      // Don't reload students to keep the result visible
+      // await loadStudents();
     } catch (error) {
       setMessage(error.message);
     }
   }
 
   async function mockScan(studentCode) {
-    if (!ensureToken()) return;
     setMessage('');
     try {
-      const json = await requestJson(`${API_BASE}/admin/mock-scan`, {
+      const json = await requestJson(`${ADMIN_WEB_API}/mock-scan`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({ student_code: studentCode }),
       });
       setMessage(`Giả lập quẹt thẻ thành công: ${json.student_code} -> ${json.log_type}`);
@@ -325,12 +304,11 @@ function App() {
 
   async function createTimetable(event) {
     event.preventDefault();
-    if (!ensureToken()) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/admin/timetables`, {
+      await requestJson(`${ADMIN_WEB_API}/timetables`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           ...timetableForm,
           day_of_week: Number(timetableForm.day_of_week),
@@ -344,12 +322,12 @@ function App() {
 
   async function updateTimetable(event) {
     event.preventDefault();
-    if (!ensureToken() || !editingTimetableId) return;
+    if (!editingTimetableId) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/admin/timetables/${editingTimetableId}`, {
+      await requestJson(`${ADMIN_WEB_API}/timetables/${editingTimetableId}`, {
         method: 'PUT',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           ...timetableForm,
           day_of_week: Number(timetableForm.day_of_week),
@@ -401,11 +379,11 @@ function App() {
   }
 
   async function deleteTimetable(id) {
-    if (!ensureToken()) return;
+    if (!window.confirm('Xác nhận xóa thời khóa biểu?')) return;
     try {
-      await requestJson(`${API_BASE}/admin/timetables/${id}`, {
+      await requestJson(`${ADMIN_WEB_API}/timetables/${id}`, {
         method: 'DELETE',
-        headers: authHeaders,
+        headers: adminHeaders,
       });
       await loadTimetables();
     } catch (error) {
@@ -415,14 +393,13 @@ function App() {
 
   async function createFee(event) {
     event.preventDefault();
-    if (!ensureToken()) return;
     setMessage('');
     try {
       const subjectFees = JSON.parse(feeForm.subject_fees_text || '{}');
       const otherFees = JSON.parse(feeForm.other_fees_text || '{}');
-      await requestJson(`${API_BASE}/admin/fees`, {
+      await requestJson(`${ADMIN_WEB_API}/fees`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           student_code: feeForm.student_code,
           class_id: feeForm.class_id || null,
@@ -442,14 +419,14 @@ function App() {
 
   async function updateFee(event) {
     event.preventDefault();
-    if (!ensureToken() || !editingFeeId) return;
+    if (!editingFeeId) return;
     setMessage('');
     try {
       const subjectFees = JSON.parse(feeForm.subject_fees_text || '{}');
       const otherFees = JSON.parse(feeForm.other_fees_text || '{}');
-      await requestJson(`${API_BASE}/admin/fees/${editingFeeId}`, {
+      await requestJson(`${ADMIN_WEB_API}/fees/${editingFeeId}`, {
         method: 'PUT',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           student_code: feeForm.student_code,
           class_id: feeForm.class_id || null,
@@ -507,11 +484,11 @@ function App() {
   }
 
   async function deleteFee(id) {
-    if (!ensureToken()) return;
+    if (!window.confirm('Xác nhận xóa học phí?')) return;
     try {
-      await requestJson(`${API_BASE}/admin/fees/${id}`, {
+      await requestJson(`${ADMIN_WEB_API}/fees/${id}`, {
         method: 'DELETE',
-        headers: authHeaders,
+        headers: adminHeaders,
       });
       await loadFees();
     } catch (error) {
@@ -521,12 +498,11 @@ function App() {
 
   async function createAnnouncement(event) {
     event.preventDefault();
-    if (!ensureToken()) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/admin/announcements`, {
+      await requestJson(`${ADMIN_WEB_API}/announcements`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify(announcementForm),
       });
       setAnnouncementForm({ title: '', content: '', is_general: true });
@@ -537,11 +513,11 @@ function App() {
   }
 
   async function deleteAnnouncement(id) {
-    if (!ensureToken()) return;
+    if (!window.confirm('Xác nhận xóa thông báo?')) return;
     try {
-      await requestJson(`${API_BASE}/admin/announcements/${id}`, {
+      await requestJson(`${ADMIN_WEB_API}/announcements/${id}`, {
         method: 'DELETE',
-        headers: authHeaders,
+        headers: adminHeaders,
       });
       await loadAnnouncements();
     } catch (error) {
@@ -551,12 +527,11 @@ function App() {
 
   async function createGrade(event) {
     event.preventDefault();
-    if (!ensureToken()) return;
     setMessage('');
     try {
-      await requestJson(`${API_BASE}/admin/grades`, {
+      await requestJson(`${ADMIN_WEB_API}/grades`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           student_code: gradeForm.student_code,
           subject_name: gradeForm.subject_name,
@@ -577,11 +552,11 @@ function App() {
   }
 
   async function deleteGrade(id) {
-    if (!ensureToken()) return;
+    if (!window.confirm('Xác nhận xóa điểm?')) return;
     try {
-      await requestJson(`${API_BASE}/admin/grades/${id}`, {
+      await requestJson(`${ADMIN_WEB_API}/grades/${id}`, {
         method: 'DELETE',
-        headers: authHeaders,
+        headers: adminHeaders,
       });
       await loadGrades();
     } catch (error) {
@@ -593,42 +568,7 @@ function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
-          <h1 className="mr-3 text-xl font-bold">Quản trị SaaS Trường học</h1>
-          <input
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Bearer token (giáo viên/quản trị)"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
-          <input
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Email quản trị"
-            value={loginForm.email}
-            onChange={(e) =>
-              setLoginForm((prev) => ({ ...prev, email: e.target.value }))
-            }
-          />
-          <input
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Mật khẩu quản trị"
-            type="password"
-            value={loginForm.password}
-            onChange={(e) =>
-              setLoginForm((prev) => ({ ...prev, password: e.target.value }))
-            }
-          />
-          <input
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Mã trường (school_id)"
-            value={schoolId}
-            onChange={(e) => setSchoolId(e.target.value)}
-          />
-          <button
-            onClick={loginAdmin}
-            className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Đăng nhập
-          </button>
+          <h1 className="mr-3 text-xl font-bold">Danh sách học sinh</h1>
           <button
             onClick={loadStudents}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
@@ -643,6 +583,7 @@ function App() {
           {[
             ['students', 'Quản lý Học sinh'],
             ['provision', 'Cấp tài khoản Phụ huynh'],
+            ['parents', `Danh sách Phụ huynh (${parents.length})`],
             ['timetable', 'Thời khóa biểu (Mon-Sat)'],
             ['fees', 'Học phí & Thu phí'],
             ['announcements', 'Thông báo'],
@@ -758,7 +699,8 @@ function App() {
         {tab === 'provision' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 text-lg font-semibold">Tạo tài khoản phụ huynh</h2>
-            <div className="mb-3 flex gap-2">
+            
+            <div className="mb-3 grid gap-2 md:grid-cols-2">
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 value={selectedStudentId}
@@ -771,27 +713,96 @@ function App() {
                   </option>
                 ))}
               </select>
-              <button
-                onClick={provisionParent}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Cấp tài khoản
-              </button>
+              
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Họ tên phụ huynh (tùy chọn)"
+                value={parentForm.parent_name}
+                onChange={(e) => setParentForm(prev => ({ ...prev, parent_name: e.target.value }))}
+              />
+              
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Email (tùy chọn, mặc định: parent.{student_code}@school.local)"
+                type="email"
+                value={parentForm.parent_email}
+                onChange={(e) => setParentForm(prev => ({ ...prev, parent_email: e.target.value }))}
+              />
+              
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Số điện thoại (tùy chọn)"
+                value={parentForm.parent_phone}
+                onChange={(e) => setParentForm(prev => ({ ...prev, parent_phone: e.target.value }))}
+              />
+              
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Mật khẩu (tùy chọn, mặc định: Parent@{student_code})"
+                type="password"
+                value={parentForm.password}
+                onChange={(e) => setParentForm(prev => ({ ...prev, password: e.target.value }))}
+              />
             </div>
+            
+            <button
+              onClick={provisionParent}
+              disabled={!selectedStudentId}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-gray-400"
+            >
+              Cấp tài khoản
+            </button>
 
-            {provisionResult ? (
-              <div className="rounded-lg bg-slate-50 p-3 text-sm">
-                <p>
-                  <strong>Phụ huynh:</strong> {provisionResult.parent?.full_name}
-                </p>
-                <p>
-                  <strong>Email/SĐT:</strong> {provisionResult.credentials?.email_or_phone}
-                </p>
-                <p>
-                  <strong>Mật khẩu:</strong> {provisionResult.credentials?.password}
-                </p>
+            {provisionResult && provisionResult.ok ? (
+              <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm">
+                <p className="text-green-800 font-semibold">{provisionResult.message}</p>
+                <hr className="my-2 border-green-200"/>
+                <p><strong>Họ tên:</strong> {provisionResult.data?.parent_name}</p>
+                <p><strong>Email:</strong> {provisionResult.data?.parent_email}</p>
+                <p><strong>Số điện thoại:</strong> {provisionResult.data?.parent_phone || '-'}</p>
+                <p><strong>Mật khẩu:</strong> {provisionResult.data?.password}</p>
+                <p><strong>Mã HS:</strong> {provisionResult.data?.student_code}</p>
               </div>
             ) : null}
+          </section>
+        ) : null}
+
+        {tab === 'parents' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <h2 className="mb-3 text-lg font-semibold">Danh sách tài khoản phụ huynh</h2>
+            <button
+              onClick={loadParents}
+              className="mb-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Tải danh sách
+            </button>
+            
+            {parents.length === 0 ? (
+              <p className="text-slate-500">Chưa có tài khoản phụ huynh nào.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-slate-500">
+                      <th className="py-2">Họ tên</th>
+                      <th className="py-2">Email</th>
+                      <th className="py-2">Số điện thoại</th>
+                      <th className="py-2">Học sinh liên kết</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parents.map((parent) => (
+                      <tr key={parent.id} className="border-b">
+                        <td className="py-2">{parent.full_name || '-'}</td>
+                        <td className="py-2">{parent.email}</td>
+                        <td className="py-2">{parent.phone || '-'}</td>
+                        <td className="py-2">{parent.student_name} ({parent.student_code})</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         ) : null}
 

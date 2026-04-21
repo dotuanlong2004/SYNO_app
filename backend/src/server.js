@@ -61,6 +61,10 @@ app.use('/api/v1/attendance', attendanceRouter);
 app.use('/api/v1', studentsRouter);
 app.use('/api/v1/users', usersRouter);
 
+// Admin Web Routes - NO AUTH REQUIRED (internal network only)
+const adminWebRouter = require('./routes/adminWeb');
+app.use('/api/v1/admin-web', adminWebRouter);
+
 const hardwareEnabled = process.env.ENABLE_HARDWARE_ROUTE !== 'false';
 if (hardwareEnabled) {
   const { hardwareRouter } = require('./routes/hardware');
