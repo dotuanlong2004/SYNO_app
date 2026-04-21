@@ -42,6 +42,15 @@ dependencies {
     implementation("androidx.browser:browser:1.8.0")
     implementation("androidx.core:core-ktx:1.15.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
+
+    // Firebase BoM (Bill of Materials) - manages Firebase library versions
+    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+
+    // Firebase Cloud Messaging for push notifications
+    implementation("com.google.firebase:firebase-messaging")
+
+    // Firebase Core
+    implementation("com.google.firebase:firebase-core")
 }
 
 flutter {

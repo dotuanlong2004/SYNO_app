@@ -7,6 +7,7 @@
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const { initializeFirebaseAdmin } = require('../config/firebaseAdmin');
 
 const router = express.Router();
 
@@ -263,6 +264,42 @@ router.post('/chat/messages', mobileAuth, async (req, res) => {
   } catch (error) {
     console.error('Failed to send mobile chat message', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * Cập nhật FCM token cho user (để nhận push notification)
+ * POST /api/mobile/fcm-token
+ */
+router.post('/fcm-token', mobileAuth, async (req, res) => {
+  try {
+    const { fcm_token } = req.body;
+
+    if (!fcm_token || typeof fcm_token !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        error: 'fcm_token là bắt buộc và phải là string',
+      });
+    }
+
+    const supabase = getSupabase();
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ fcm_token })
+      .eq('id', req.user.id);
+
+    if (updateError) throw updateError;
+
+    return res.json({
+      ok: true,
+      message: 'FCM token đã được cập nhật',
+    });
+  } catch (error) {
+    console.error('Failed to update FCM token:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Không thể cập nhật FCM token',
+    });
   }
 });
 
