@@ -20,6 +20,8 @@ redis-data/
 
 backend/firebase-service-account.json
 zk-agent/agent-buffer.sqlite
+attendance_app/android/app/google-services.json
+google-services.json
 
 database_credentials.txt
 debug-dbfe9f.log
