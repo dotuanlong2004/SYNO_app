@@ -52,3 +52,26 @@ Dự án xây dựng hệ thống phần mềm quản lý trường học toàn 
 - **Database:** PostgreSQL (Cloud VPS)
 - **Hardware Bridge (Local Agent):** Node.js `node-zklib`, SQLite buffer, node-windows)
 - **Push Notifications:** Firebase (FCM)
+
+---
+
+## 🔐 Cấu hình Firebase (Push Notification)
+
+File `google-services.json` **KHÔNG** được commit lên Git. Để chạy app Android:
+
+### Bước 1: Lấy file từ Firebase Console
+1. Vào https://console.firebase.google.com/
+2. Chọn project `attendanceapp-82270`
+3. ⚙️ Settings → Project settings → General
+4. Scroll xuống "Your apps" → chọn Android app
+5. Click **"Download google-services.json"**
+
+### Bước 2: Đặt file vào đúng vị trí
+```
+attendance_app/android/app/google-services.json
+```
+
+> ⚠️ **Lưu ý:** File này chứa API key. KHÔNG được push lên GitHub!
+
+### File Template
+Nếu chưa có quyền truy cập Firebase, copy file `google-services.json.example` và điền thông tin của bạn.
