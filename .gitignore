@@ -25,3 +25,5 @@ google-services.json
 
 database_credentials.txt
 debug-dbfe9f.log
+local.properties
+.idea/
