@@ -32,7 +32,7 @@ function buildBody(studentCode, scannedAtIso, classification) {
 async function clearInvalidFcmToken(userId) {
     const supabase = getSupabase();
     await supabase
-        .from('users')
+        .from('user_profiles')
         .update({ fcm_token: null, updated_at: new Date().toISOString() })
         .eq('id', userId);
 }
@@ -42,7 +42,7 @@ async function notifyUsers(studentCode, scannedAtIso, classification, schoolId) 
 
     // Use RPC function or direct query
     const { data: users, error } = await supabase
-        .from('users')
+        .from('user_profiles')
         .select('id, fcm_token')
         .eq('is_active', true)
         .eq('school_id', schoolId)
