@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,15 +16,12 @@ import '../../data/datasources/timetable_remote_data_source.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
 import '../../data/repositories/students_repository_impl.dart';
 import '../../data/repositories/timetable_repository_impl.dart';
-import '../../data/services/fcm_service.dart';
 import '../../domain/auth/auth_state.dart';
-import '../../domain/auth/auth_user.dart';
 import '../../domain/auth/login_result.dart';
 import '../../domain/auth/parent_registration_result.dart';
 import '../../domain/auth/token_pair.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/announcement_item.dart';
-import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/fee_notice.dart';
 import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/student_link_info.dart';
@@ -61,8 +57,8 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> _initialize() async {
-    final stored = await ref
-        .read(tokenStorageProvider)
+    final tokenStorage = ref.read(tokenStorageProvider);
+    final stored = await tokenStorage
         .read()
         .timeout(const Duration(seconds: 1), onTimeout: () => null);
     if (stored == null) {
@@ -71,30 +67,21 @@ class AuthController extends Notifier<AuthState> {
     }
 
     await ref.read(tokenSessionProvider).set(stored);
-    final restoredUser = _userFromAccessToken(stored.accessToken);
-    state = AuthState.authenticated(restoredUser);
-  }
 
-  AuthUser _userFromAccessToken(String accessToken) {
-    try {
-      final parts = accessToken.split('.');
-      if (parts.length != 3) {
-        return const AuthUser(id: '', email: '', fullName: '', role: 'UNKNOWN');
-      }
+    // Đọc user profile đã lưu (có role đúng) thay vì decode JWT Supabase
+    final restoredUser = await tokenStorage
+        .readUser()
+        .timeout(const Duration(seconds: 1), onTimeout: () => null);
 
-      final payloadBytes = base64Url.decode(base64Url.normalize(parts[1]));
-      final payload =
-          jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
-
-      return AuthUser(
-        id: '${payload['sub'] ?? ''}',
-        email: '${payload['email'] ?? ''}',
-        fullName: '${payload['full_name'] ?? ''}',
-        role: '${payload['role'] ?? payload['user_role'] ?? 'UNKNOWN'}',
-      );
-    } catch (_) {
-      return const AuthUser(id: '', email: '', fullName: '', role: 'UNKNOWN');
+    if (restoredUser == null || restoredUser.id.isEmpty) {
+      // Fallback: chưa có user trong storage (session cũ trước khi update)
+      // Xóa token cũ để buộc đăng nhập lại
+      await tokenStorage.clear();
+      state = const AuthState.unauthenticated();
+      return;
     }
+
+    state = AuthState.authenticated(restoredUser);
   }
 
   Future<bool> signIn({required String email, required String password}) async {
@@ -103,8 +90,8 @@ class AuthController extends Notifier<AuthState> {
           .read(authApiProvider)
           .login(email: email, password: password);
       await _persistTokens(result.tokens);
+      await ref.read(tokenStorageProvider).saveUser(result.user);
       state = AuthState.authenticated(result.user);
-      await _syncFcmTokenAfterAuth();
       return true;
     } catch (error) {
       state = AuthState.unauthenticated(_buildSignInErrorMessage(error));
@@ -127,17 +114,9 @@ class AuthController extends Notifier<AuthState> {
           studentLinkCode: linkCode,
         );
     await _persistTokens(result.loginResult.tokens);
+    await ref.read(tokenStorageProvider).saveUser(result.loginResult.user);
     state = AuthState.authenticated(result.loginResult.user);
-    await _syncFcmTokenAfterAuth();
     return result;
-  }
-
-  Future<void> _syncFcmTokenAfterAuth() async {
-    try {
-      await ref.read(fcmServiceProvider).initialize();
-    } catch (_) {
-      // Ignore token sync failures to avoid blocking auth flow.
-    }
   }
 
   bool _isNetworkError(Object error) {
@@ -305,36 +284,6 @@ final gradesProvider = FutureProvider<List<GradeRecord>>((ref) async {
   return dataSource.fetchGrades();
 });
 
-final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
-  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
-  return dataSource.fetchChatMessages();
-});
-
-final chatComposerProvider = NotifierProvider<ChatComposerController, bool>(
-  ChatComposerController.new,
-);
-
-class ChatComposerController extends Notifier<bool> {
-  @override
-  bool build() => false;
-
-  Future<void> sendMessage({
-    required String messageText,
-    String? studentCode,
-  }) async {
-    if (state) return;
-    state = true;
-    try {
-      await ref.read(parentFeaturesDataSourceProvider).sendChatMessage(
-        messageText: messageText,
-        studentCode: studentCode,
-      );
-      ref.invalidate(chatMessagesProvider);
-    } finally {
-      state = false;
-    }
-  }
-}
 
 final studentsDataSourceProvider = Provider<StudentsRemoteDataSource>((ref) {
   final dio = ref.watch(dioProvider);
@@ -349,17 +298,4 @@ final studentsRepositoryProvider = Provider<StudentsRepository>((ref) {
 final studentsProvider = FutureProvider<List<StudentLinkInfo>>((ref) async {
   final repository = ref.watch(studentsRepositoryProvider);
   return repository.fetchStudents();
-});
-
-final fcmServiceProvider = Provider<FcmService>((ref) {
-  return FcmService(
-    onTokenReceived: (token) async {
-      await ref
-          .read(dioProvider)
-          .post<Map<String, dynamic>>(
-            '/api/v1/users/fcm-token',
-            data: {'fcm_token': token},
-          );
-    },
-  );
 });

@@ -49,14 +49,14 @@ ENABLE_ATTENDANCE_QUEUE=true
 ### 1. Cài Dependencies
 
 ```bash
-cd backend
-npm install
+cd d:\attendance_app_dev
+corepack pnpm install
 ```
 
 ### 2. Chạy Migration Schema
 
 ```bash
-npm run db:migrate
+corepack pnpm --filter backend run db:migrate
 ```
 
 Script này sẽ:
@@ -68,7 +68,7 @@ Script này sẽ:
 ### 3. Khởi Động Server
 
 ```bash
-npm run dev
+corepack pnpm --filter backend run dev
 ```
 
 ### 4. Kiểm Tra Health
@@ -90,10 +90,10 @@ Expected response:
 
 | Script | Mô tả |
 |--------|-------|
-| `npm run db:migrate` | Apply schema lên Supabase |
-| `npm run db:setup` | Alias của migrate |
-| `npm start` | Chạy production |
-| `npm run dev` | Chạy development (watch mode) |
+| `corepack pnpm --filter backend run db:migrate` | Apply schema lên Supabase |
+| `corepack pnpm --filter backend run db:setup` | Alias của migrate |
+| `corepack pnpm --filter backend build && corepack pnpm --filter backend start` | Chạy production |
+| `corepack pnpm --filter backend run dev` | Chạy development (watch mode) |
 
 ## Troubleshooting
 
@@ -107,7 +107,7 @@ Expected response:
 ### Lỗi Migration Fail
 - Kiểm tra service role key có đúng không
 - Kiểm tra project đã enable PostgreSQL chưa
-- Thử chạy lại `npm run db:migrate`
+- Thử chạy lại `corepack pnpm --filter backend run db:migrate`
 
 ## Kiến Trúc Mới
 

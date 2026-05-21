@@ -5,6 +5,7 @@ class AttendanceRecordModel extends AttendanceRecord {
     required super.studentId,
     required super.timestamp,
     required super.status,
+    required super.logType,
     super.lateMinutes,
   });
 
@@ -16,6 +17,11 @@ class AttendanceRecordModel extends AttendanceRecord {
       _ => AttendanceStatus.onTime,
     };
 
+    final rawLogType = (json['log_type'] as String?) ?? 'check_in';
+    final logType = rawLogType == 'check_out'
+        ? AttendanceLogType.checkOut
+        : AttendanceLogType.checkIn;
+
     int? parseNullableInt(dynamic value) {
       if (value == null) return null;
       if (value is int) return value;
@@ -23,12 +29,15 @@ class AttendanceRecordModel extends AttendanceRecord {
       return int.tryParse('$value');
     }
 
+    final parsedTimestamp =
+        DateTime.tryParse((json['timestamp'] as String?) ?? '') ??
+        DateTime.now();
+
     return AttendanceRecordModel(
       studentId: (json['student_id'] as String?) ?? 'UNKNOWN',
-      timestamp:
-          DateTime.tryParse((json['timestamp'] as String?) ?? '') ??
-          DateTime.now(),
+      timestamp: parsedTimestamp.toLocal(),
       status: status,
+      logType: logType,
       lateMinutes: parseNullableInt(json['late_minutes']),
     );
   }

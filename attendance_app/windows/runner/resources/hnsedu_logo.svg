@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#C62828"/>
+
+  <!-- Stars around -->
+  <g fill="#FFC107">
+    <!-- Top left star -->
+    <polygon points="60,70 63,80 74,80 65,87 68,98 60,91 52,98 55,87 46,80 57,80"/>
+    <!-- Top right star -->
+    <polygon points="196,70 199,80 210,80 201,87 204,98 196,91 188,98 191,87 182,80 193,80"/>
+    <!-- Bottom left star -->
+    <polygon points="60,170 63,180 74,180 65,187 68,198 60,191 52,198 55,187 46,180 57,180"/>
+    <!-- Bottom right star -->
+    <polygon points="196,170 199,180 210,180 201,187 204,198 196,191 188,198 191,187 182,180 193,180"/>
+  </g>
+
+  <!-- Center text HN -->
+  <text x="128" y="145" font-family="Arial, sans-serif" font-size="90" font-weight="bold" fill="white" text-anchor="middle">HN</text>
+
+  <!-- Bottom text SEDU -->
+  <text x="128" y="205" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#FFC107" text-anchor="middle">SEDU</text>
+</svg>

@@ -20,7 +20,7 @@ $registerBody = @{
     email = "testparent@example.com"
     password = "123456"
     link_code = "LINK123"
-    school_id = "default_school"
+    school_id = "1"
 } | ConvertTo-Json
 
 try {

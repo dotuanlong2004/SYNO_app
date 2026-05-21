@@ -2,25 +2,29 @@
   "name": "backend",
   "version": "2.0.0",
   "description": "Student attendance API — Supabase + pg-boss queue",
-  "main": "src/server.js",
+  "main": "dist/src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "db:migrate": "node scripts/auto-migrate.js",
-    "db:setup": "node scripts/auto-migrate.js",
-    "db:auto": "node scripts/auto-migrate.js",
-    "test": "echo \"No tests yet\" && exit 0",
-    "db:seed-user": "node scripts/seed-user.js",
-    "db:seed-attendance": "node scripts/seed-attendance.js",
-    "db:seed-timetable": "node scripts/seed-timetable.js",
-    "db:gen-link-codes": "node scripts/generate-student-link-codes.js"
+    "start": "node dist/src/server.js",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "db:migrate": "tsx scripts/auto-migrate.ts",
+    "db:setup": "tsx scripts/auto-migrate.ts",
+    "db:auto": "tsx scripts/auto-migrate.ts",
+    "test": "tsc -p tsconfig.json --noEmit && tsx scripts/smoke-status-codes.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:status": "tsx scripts/smoke-status-codes.ts",
+    "check:production": "tsx scripts/check-production-readiness.ts --strict",
+    "db:seed-user": "tsx scripts/seed-user.ts",
+    "db:seed-attendance": "tsx scripts/seed-attendance.ts",
+    "db:seed-timetable": "tsx scripts/seed-timetable.ts",
+    "db:gen-link-codes": "tsx scripts/generate-student-link-codes.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.4",
+    "@supabase/supabase-js": "^2.105.0",
     "axios": "^1.15.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -29,6 +33,16 @@
     "helmet": "^8.1.0",
     "luxon": "^3.7.2",
     "pg": "^8.20.0",
-    "pg-boss": "^10.1.6"
+    "pg-boss": "^10.1.6",
+    "zkteco-js": "^1.7.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }

@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "packageManager": "pnpm@11.1.3",
+  "dependencies": {
+    "express": "^5.2.1",
+    "zklib-js": "^1.3.5"
+  }
+}

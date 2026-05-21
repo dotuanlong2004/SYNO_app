@@ -1,6 +1,8 @@
-import 'package:firebase_core/firebase_core.dart';
+import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'local_notification_service.dart';
 
@@ -81,11 +83,42 @@ class FCMService {
   /// Gửi token lên backend để lưu
   /// Backend sẽ dùng token này để gửi push notification khi có điểm danh
   static Future<void> _sendTokenToBackend(String token) async {
-    // TODO: Implement API call
-    // Endpoint: POST /api/users/fcm-token
-    // Body: { "fcm_token": token }
-    if (kDebugMode) {
-      print('Gửi FCM token lên backend: $token');
+    try {
+      // Lấy token từ storage
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('auth_token');
+      
+      if (authToken == null) {
+        if (kDebugMode) {
+          print('❌ Không có auth token, không thể gửi FCM token');
+        }
+        return;
+      }
+      
+      // Gọi API để lưu FCM token
+      final response = await http.post(
+        Uri.parse('http://localhost:3000/api/v1/users/fcm-token'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+        body: json.encode({'fcm_token': token}),
+      );
+      
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ FCM token đã gửi lên backend thành công');
+        }
+      } else {
+        if (kDebugMode) {
+          print('❌ Lỗi gửi FCM token: ${response.statusCode}');
+          print('Response body: ${response.body}');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Lỗi gửi FCM token: $e');
+      }
     }
   }
 

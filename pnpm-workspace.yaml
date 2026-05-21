@@ -1,0 +1,9 @@
+packages:
+  - backend
+  - admin_web
+  - zk-agent
+allowBuilds:
+  '@firebase/util': true
+  esbuild: true
+  protobufjs: true
+  sqlite3: true

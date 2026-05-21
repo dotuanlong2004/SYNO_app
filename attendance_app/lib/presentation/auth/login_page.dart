@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../providers/dashboard_providers.dart';
+import '../widgets/brand_logo.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -35,28 +35,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           password: _passwordController.text,
         );
 
-    if (mounted && !success) {
-      final message =
-          ref.read(authControllerProvider).message ?? 'Login failed';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+    if (!mounted) return;
+
+    if (success) {
+      final role = (ref.read(authControllerProvider).user?.role ?? '').toLowerCase();
+      if (role == 'admin' || role == 'teacher') {
+        await ref.read(authControllerProvider.notifier).signOut();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Tài khoản Admin/Giáo viên vui lòng đăng nhập tại cổng quản trị web.',
+              ),
+              duration: Duration(seconds: 5),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } else {
+      final message = ref.read(authControllerProvider).message ?? 'Đăng nhập thất bại';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
 
-    if (mounted) {
-      setState(() => _submitting = false);
-    }
+    if (mounted) setState(() => _submitting = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: <Color>[Color(0xFFF4F8FF), Color(0xFFEAF3FF)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFFC62828).withValues(alpha: 0.05), // Đỏ nhạt
+              Colors.white,
+              const Color(0xFF1565C0).withValues(alpha: 0.05), // Xanh nhạt
+            ],
           ),
         ),
         child: Center(
@@ -73,22 +90,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        const Icon(
-                          Icons.school_rounded,
-                          color: AppTheme.skyBlue,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 12),
+                        const BrandLogo(size: 120),
+                        const SizedBox(height: 24),
                         Text(
-                          'Welcome Back',
+                          'Đăng nhập hệ thống',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF1A1F2E),
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Sign in to access attendance dashboard',
+                          'Hệ thống điểm danh thông minh - Hữu Nghị School',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[600],
+                          ),
                         ),
                         const SizedBox(height: 20),
                         TextFormField(
@@ -96,11 +114,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
                             labelText: 'Email',
+                            hintText: 'Nhập email của bạn',
                             prefixIcon: Icon(Icons.alternate_email_rounded),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Email is required';
+                              return 'Vui lòng nhập email';
                             }
                             return null;
                           },
@@ -110,12 +129,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           controller: _passwordController,
                           obscureText: true,
                           decoration: const InputDecoration(
-                            labelText: 'Password',
+                            labelText: 'Mật khẩu',
+                            hintText: 'Nhập mật khẩu',
                             prefixIcon: Icon(Icons.lock_outline_rounded),
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Password is required';
+                              return 'Vui lòng nhập mật khẩu';
                             }
                             return null;
                           },
@@ -123,6 +143,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         const SizedBox(height: 22),
                         ElevatedButton(
                           onPressed: _submitting ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF28C28), // Màu cam logo
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           child: _submitting
                               ? const SizedBox(
                                   height: 20,
@@ -132,7 +160,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text('Login'),
+                              : const Text(
+                                  'ĐĂNG NHẬP',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
                         ),
                       ],
                     ),

@@ -1,0 +1,11 @@
+name: attendance_app_windows
+
+# Windows-specific dependency overrides
+# Firebase không hỗ trợ Windows Desktop, nên override bằng stub
+dependency_overrides:
+  firebase_core: ^0.0.1
+  firebase_messaging: ^0.0.1
+  firebase_auth: ^0.0.1
+  firebase_storage: ^0.0.1
+  cloud_firestore: ^0.0.1
+  flutter_local_notifications: ^0.0.1

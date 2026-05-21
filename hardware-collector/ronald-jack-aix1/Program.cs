@@ -12,14 +12,7 @@ using FPClockLib;
 class Program
 {
     // ─── Cấu hình ────────────────────────────────────────────────────────────
-    const string DEVICE_IP       = "192.168.0.225";
-    const int    DEVICE_PORT     = 4370;
-    const int    MACHINE_NUMBER  = 1;
-    const string SCHOOL_ID       = "default_school";
-    const string BACKEND_URL     = "http://localhost:3000/api/v1/hardware/scan";
-    const string SUPABASE_URL    = "https://bimepdqcwpsynjimvenn.supabase.co";
-    const string SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpbWVwZHFjd3BzeW5qaW12ZW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNTc0MDAsImV4cCI6MjA5MTkzMzQwMH0.RQ-ah70YpiAIDpEhaSqnY0bj2ShcMxwDUPLAdncLnGg";
-    const int    POLL_MS         = 3000;
+    static readonly CollectorConfig Config = CollectorConfig.Load();
     // ─────────────────────────────────────────────────────────────────────────
 
     static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -28,33 +21,47 @@ class Program
     static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
+        Config.Validate();
         Console.WriteLine("════════════════════════════════════════════════════════");
         Console.WriteLine("  RONALD JACK AI-X1 — COM SDK Collector");
-        Console.WriteLine($"  Thiết bị: {DEVICE_IP}:{DEVICE_PORT}  |  School: {SCHOOL_ID}");
+        Console.WriteLine($"  Thiết bị: {Config.DeviceIp}:{Config.DevicePort}  |  School: {Config.SchoolId}");
+        Console.WriteLine($"  Backend: {Config.BackendUrl}");
+        Console.WriteLine($"  Hardware API key: {(string.IsNullOrWhiteSpace(Config.HardwareApiKey) ? "not set" : "set")}");
         Console.WriteLine("════════════════════════════════════════════════════════");
         Console.WriteLine();
 
         try
         {
-            // ── BƯỚC 1: Load bảng map ma_cham_cong → student_code từ Supabase ──
-            Console.Write("[1] Tải danh sách học sinh từ Supabase... ");
-            var studentMap = LoadStudentMap();  // enrollId(string) → student_code
-            Console.WriteLine($"✓ {studentMap.Count} học sinh có mã chấm công");
-            foreach (var kv in studentMap)
-                Console.WriteLine($"    ma_cham_cong={kv.Key} → student_code={kv.Value}");
+            // ── BƯỚC 1: Backend sẽ resolve ma_cham_cong theo school_id ───────
+            Console.WriteLine("[1] Backend sẽ resolve mã chấm công theo school_id");
+            Console.WriteLine("    Collector không đọc trực tiếp Supabase bằng anon key.");
             Console.WriteLine();
 
             // ── BƯỚC 2: Kết nối máy chấm công ──────────────────────────────────
             var fp = new FP_CLOCKClass();
-            string ip = DEVICE_IP;
-            int port = DEVICE_PORT;
-            int machineNumber = MACHINE_NUMBER;
+            string ip = Config.DeviceIp;
+            int port = Config.DevicePort;
+            int machineNumber = Config.MachineNumber;
 
-            fp.SetIPAddress(ref ip, port, 0);
+            fp.SetIPAddress(ref ip, port, Config.CommPassword);
             Console.Write("[Kết nối] OpenCommPort ... ");
             bool connected = fp.OpenCommPort(machineNumber);
             Console.WriteLine(connected ? "✓ THÀNH CÔNG" : "✗ THẤT BẠI");
-            if (!connected) { Marshal.ReleaseComObject(fp); return; }
+
+            if (!connected)
+            {
+                int sdkErr = GetSdkLastErrorSafe(fp);
+                if (sdkErr != -1)
+                    Console.WriteLine($"    SDK LastError={sdkErr}");
+
+                Console.WriteLine();
+                Console.WriteLine("Nguyên nhân thường gặp:");
+                Console.WriteLine("  1) Đang có collector khác giữ kết nối tới máy chấm công.");
+                Console.WriteLine("  2) Máy/SDK chưa giải phóng socket sau lần chạy trước; chờ 10-30 giây rồi chạy lại.");
+                Console.WriteLine("  3) IP/port hoặc COM key trên máy không khớp.");
+                Marshal.ReleaseComObject(fp);
+                return;
+            }
 
             fp.EnableDevice(machineNumber, 1);
 
@@ -70,15 +77,14 @@ class Program
 
             // Hiện log hôm nay
             var today = DateTime.Today;
-            var todayLogs = allLogs.Where(x => x.time.Date == today).OrderBy(x => x.time).ToList();
+            var todayLogs = allLogs.Where(x => x.time.Date == today).OrderByDescending(x => x.time).ToList();
             if (todayLogs.Count > 0)
             {
                 Console.WriteLine();
                 Console.WriteLine($"  ─── Chấm công hôm nay {today:dd/MM/yyyy} ({todayLogs.Count} lần) ───");
                 foreach (var r in todayLogs)
                 {
-                    studentMap.TryGetValue(r.enroll.ToString(), out var sc);
-                    Console.WriteLine($"    {r.time:HH:mm:ss}  Mã CC #{r.enroll}" + (sc != null ? $" → {sc}" : " [chưa map]"));
+                    Console.WriteLine($"    {r.time:HH:mm:ss}  Mã CC #{r.enroll}");
                 }
             }
 
@@ -95,7 +101,7 @@ class Program
 
             while (true)
             {
-                Thread.Sleep(POLL_MS);
+                Thread.Sleep(Config.PollMs);
 
                 var freshLogs = ReadAllLogs(fp, machineNumber);
                 if (freshLogs == null)
@@ -106,7 +112,7 @@ class Program
 
                 var newRecords = freshLogs
                     .Where(r => r.time > knownLatest)
-                    .OrderBy(r => r.time)
+                    .OrderByDescending(r => r.time)
                     .ToList();
 
                 if (newRecords.Count > 0)
@@ -117,18 +123,9 @@ class Program
 
                     foreach (var r in newRecords)
                     {
-                        // Map enrollId → student_code
                         string enrollKey = r.enroll.ToString();
-                        if (!studentMap.TryGetValue(enrollKey, out string studentCode))
-                        {
-                            Console.WriteLine($"  ⚠ Mã CC #{r.enroll} chưa được map với học sinh nào trong hệ thống!");
-                            Console.WriteLine($"    Thời gian: {r.time:dd/MM/yyyy HH:mm:ss}");
-                            Console.WriteLine($"    → Vui lòng cập nhật cột ma_cham_cong = '{enrollKey}' cho học sinh tương ứng");
-                            continue;
-                        }
-
-                        Console.Write($"  ✔ #{r.enroll} → {studentCode}  {r.time:dd/MM/yyyy HH:mm:ss}  → Push... ");
-                        string result = PushToBackend(studentCode, r.time);
+                        Console.Write($"  ✔ Mã CC #{r.enroll}  {r.time:dd/MM/yyyy HH:mm:ss}  → Push... ");
+                        string result = PushToBackend(enrollKey, r.time);
                         Console.WriteLine(result);
                     }
 
@@ -152,6 +149,29 @@ class Program
         Console.ReadKey();
     }
 
+    // ─── Lấy mã lỗi SDK an toàn (nếu COM expose GetLastError) ───────────────
+    static int GetSdkLastErrorSafe(FP_CLOCKClass fp)
+    {
+        try
+        {
+            var t = fp.GetType();
+            var m = t.GetMethod("GetLastError");
+            if (m == null) return -1;
+
+            object[] args = new object[] { 0 };
+            var okObj = m.Invoke(fp, args);
+            var ok = okObj is bool b && b;
+            if (!ok) return -1;
+
+            if (args.Length > 0 && args[0] is int err) return err;
+            return -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
     // ─── Đọc toàn bộ log từ máy chấm công ───────────────────────────────────
     static List<(int enroll, DateTime time, int verify)> ReadAllLogs(FP_CLOCKClass fp, int machineNumber)
     {
@@ -170,59 +190,120 @@ class Program
         return logs;
     }
 
-    // ─── Load danh sách học sinh từ Supabase REST API ────────────────────────
-    static Dictionary<string, string> LoadStudentMap()
+    // ─── Đẩy dữ liệu quét lên Backend → Supabase ─────────────────────────────
+    static string PushToBackend(string maChamCong, DateTime scannedAt)
     {
-        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            var url = $"{SUPABASE_URL}/rest/v1/students?select=student_code,ma_cham_cong&ma_cham_cong=not.is.null";
-            var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Add("apikey", SUPABASE_ANON);
-            req.Headers.Add("Authorization", $"Bearer {SUPABASE_ANON}");
+            var ser = new JavaScriptSerializer();
+            var bodyObj = new
+            {
+                ma_cham_cong = maChamCong,
+                school_id = Config.SchoolId,
+                timestamp = scannedAt.ToString("yyyy-MM-ddTHH:mm:ss.000+07:00")
+            };
+            var body = ser.Serialize(bodyObj);
+
+            var req = new HttpRequestMessage(HttpMethod.Post, Config.BackendUrl);
+            req.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            if (!string.IsNullOrWhiteSpace(Config.HardwareApiKey))
+                req.Headers.Add("x-hardware-api-key", Config.HardwareApiKey);
 
             var resp = http.SendAsync(req).Result;
             var json = resp.Content.ReadAsStringAsync().Result;
 
-            var ser = new JavaScriptSerializer();
-            var rows = ser.Deserialize<List<Dictionary<string, object>>>(json);
-            foreach (var row in rows ?? new List<Dictionary<string, object>>())
-            {
-                var maCC    = row.ContainsKey("ma_cham_cong") ? row["ma_cham_cong"]?.ToString() : null;
-                var stuCode = row.ContainsKey("student_code") ? row["student_code"]?.ToString() : null;
-                if (!string.IsNullOrEmpty(maCC) && !string.IsNullOrEmpty(stuCode))
-                    map[maCC] = stuCode;
-            }
-        }
-        catch (Exception ex) { Console.WriteLine($"[Supabase] Load thất bại: {ex.Message}"); }
-        return map;
-    }
-
-    // ─── Đẩy dữ liệu quét lên Backend → Supabase ─────────────────────────────
-    static string PushToBackend(string studentCode, DateTime scannedAt)
-    {
-        try
-        {
-            var ser = new JavaScriptSerializer();
-            var body = ser.Serialize(new {
-                student_id = studentCode,
-                school_id  = SCHOOL_ID,
-                timestamp  = scannedAt.ToString("yyyy-MM-ddTHH:mm:ss.000+07:00")
-            });
-
-            var content = new StringContent(body, Encoding.UTF8, "application/json");
-            var resp = http.PostAsync(BACKEND_URL, content).Result;
-            var json = resp.Content.ReadAsStringAsync().Result;
-
-            dynamic result = ser.DeserializeObject(json);
             if (resp.IsSuccessStatusCode)
             {
-                var resDict = result as Dictionary<string, object>;
-                bool dup = resDict != null && resDict.ContainsKey("duplicate") && (bool)resDict["duplicate"];
-                return dup ? "⏩ Bỏ qua (trùng lặp)" : "✅ Đã lưu Supabase!";
+                bool dup = false;
+                try
+                {
+                    var result = ser.DeserializeObject(json) as Dictionary<string, object>;
+                    dup = result != null && result.ContainsKey("duplicate") && result["duplicate"] is bool b && b;
+                }
+                catch { }
+
+                var brief = json.Length > 160 ? json.Substring(0, 160) + "..." : json;
+                return dup
+                    ? $"⏩ Bỏ qua (trùng lặp) | API={(int)resp.StatusCode} | resp={brief}"
+                    : $"✅ Đã lưu Supabase! | API={(int)resp.StatusCode} | resp={brief}";
             }
-            return $"✗ Backend lỗi {(int)resp.StatusCode}: {json.Substring(0, Math.Min(80, json.Length))}";
+
+            var err = json.Length > 200 ? json.Substring(0, 200) + "..." : json;
+            return $"✗ Backend lỗi {(int)resp.StatusCode} ({resp.ReasonPhrase}) | body={err}";
         }
-        catch (Exception ex) { return $"✗ Lỗi mạng: {ex.Message.Substring(0, Math.Min(60, ex.Message.Length))}"; }
+        catch (Exception ex)
+        {
+            var msg = ex.Message.Length > 120 ? ex.Message.Substring(0, 120) + "..." : ex.Message;
+            return $"✗ Lỗi mạng khi push: {msg}";
+        }
+    }
+}
+
+class CollectorConfig
+{
+    public string DeviceIp { get; private set; }
+    public int DevicePort { get; private set; }
+    public int MachineNumber { get; private set; }
+    public int CommPassword { get; private set; }
+    public string SchoolId { get; private set; }
+    public string BackendUrl { get; private set; }
+    public string HardwareApiKey { get; private set; }
+    public int PollMs { get; private set; }
+    public bool RequireHardwareApiKey { get; private set; }
+
+    public static CollectorConfig Load()
+    {
+        return new CollectorConfig
+        {
+            DeviceIp = GetEnv("AI_X1_DEVICE_IP", "192.168.0.225"),
+            DevicePort = GetIntEnv("AI_X1_DEVICE_PORT", 4370),
+            MachineNumber = GetIntEnv("AI_X1_MACHINE_NUMBER", 1),
+            CommPassword = GetIntEnv("AI_X1_COMM_PASSWORD", 0),
+            SchoolId = GetEnv("SCHOOL_ID", "1"),
+            BackendUrl = GetEnv("BACKEND_HARDWARE_SCAN_URL", "http://localhost:3000/api/v1/hardware/scan"),
+            HardwareApiKey = GetEnv("HARDWARE_API_KEY", ""),
+            PollMs = GetIntEnv("AI_X1_POLL_MS", 3000),
+            RequireHardwareApiKey = GetBoolEnv("COLLECTOR_REQUIRE_HARDWARE_API_KEY", false)
+        };
+    }
+
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(DeviceIp))
+            throw new InvalidOperationException("AI_X1_DEVICE_IP is required.");
+        if (DevicePort <= 0 || DevicePort > 65535)
+            throw new InvalidOperationException("AI_X1_DEVICE_PORT must be between 1 and 65535.");
+        if (MachineNumber <= 0)
+            throw new InvalidOperationException("AI_X1_MACHINE_NUMBER must be greater than 0.");
+        if (string.IsNullOrWhiteSpace(SchoolId))
+            throw new InvalidOperationException("SCHOOL_ID is required.");
+        if (!Uri.IsWellFormedUriString(BackendUrl, UriKind.Absolute))
+            throw new InvalidOperationException("BACKEND_HARDWARE_SCAN_URL must be an absolute URL.");
+        if (PollMs < 1000)
+            throw new InvalidOperationException("AI_X1_POLL_MS must be at least 1000.");
+        if (RequireHardwareApiKey && string.IsNullOrWhiteSpace(HardwareApiKey))
+            throw new InvalidOperationException("HARDWARE_API_KEY is required when COLLECTOR_REQUIRE_HARDWARE_API_KEY=true.");
+    }
+
+    static string GetEnv(string name, string fallback)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    static int GetIntEnv(string name, int fallback)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        int parsed;
+        return int.TryParse(value, out parsed) ? parsed : fallback;
+    }
+
+    static bool GetBoolEnv(string name, bool fallback)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(value)) return fallback;
+        return value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 }

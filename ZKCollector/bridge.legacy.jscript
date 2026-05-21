@@ -1,0 +1,99 @@
+// bridge.legacy.jscript - JScript 32-bit để chạy SDK COM
+// Chạy bằng: C:\Windows\SysWOW64\cscript.exe bridge.legacy.jscript
+
+var WshShell = new ActiveXObject("WScript.Shell");
+var deviceIP = "192.168.0.225";
+var devicePort = 4370;
+
+function main() {
+    try {
+        // Tạo COM object zkemkeeper
+        var zk = new ActiveXObject("zkemkeeper.ZKEM");
+        
+        WScript.Echo(JSON.stringify({ info: "COM created successfully" }));
+        
+        // Kết nối thiết bị
+        var connected = zk.Connect_Net(deviceIP, devicePort);
+        
+        if (!connected) {
+            WScript.Echo(JSON.stringify({ error: "Cannot connect to device", ip: deviceIP, port: devicePort }));
+            return 1;
+        }
+        
+        WScript.Echo(JSON.stringify({ info: "Connected to device", ip: deviceIP }));
+        
+        // Đồng bộ giờ
+        var now = new Date();
+        zk.SetDeviceTime2(1, now.getFullYear(), now.getMonth() + 1, now.getDate(), 
+                          now.getHours(), now.getMinutes(), now.getSeconds());
+        
+        // Đọc logs
+        zk.DisableDevice(1);
+        
+        if (zk.ReadGeneralLogData(1)) {
+            var logs = [];
+            var enrollNumber = "", verifyMode = 0, inOutMode = 0;
+            var year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, workCode = 0;
+            
+            while (zk.SSR_GetGeneralLogData(1, enrollNumber, verifyMode, inOutMode,
+                                             year, month, day, hour, minute, second, workCode)) {
+                logs.push({
+                    enrollNumber: enrollNumber,
+                    time: year + "-" + pad(month) + "-" + pad(day) + "T" + 
+                          pad(hour) + ":" + pad(minute) + ":" + pad(second),
+                    inOutMode: inOutMode,
+                    verifyMode: verifyMode
+                });
+            }
+            
+            WScript.Echo(JSON.stringify({ logs: logs, count: logs.length }));
+        } else {
+            WScript.Echo(JSON.stringify({ logs: [], count: 0, info: "No new logs" }));
+        }
+        
+        zk.EnableDevice(1);
+        zk.Disconnect();
+        
+        return 0;
+    } catch (e) {
+        WScript.Echo(JSON.stringify({ error: e.message, type: e.name }));
+        return 1;
+    }
+}
+
+function pad(n) {
+    return n < 10 ? "0" + n : n;
+}
+
+// JSON polyfill cho JScript
+if (!JSON) {
+    var JSON = {
+        stringify: function(obj) {
+            var str = "{";
+            for (var key in obj) {
+                if (str.length > 1) str += ",";
+                var val = obj[key];
+                if (typeof val === "string") {
+                    str += '"' + key + '":"' + val.replace(/"/g, '\\"') + '"';
+                } else if (typeof val === "number") {
+                    str += '"' + key + '":' + val;
+                } else if (typeof val === "boolean") {
+                    str += '"' + key + '":' + val;
+                } else if (val && val.length !== undefined) { // array
+                    str += '"' + key + '":' + JSON.stringifyArray(val);
+                }
+            }
+            return str + "}";
+        },
+        stringifyArray: function(arr) {
+            var str = "[";
+            for (var i = 0; i < arr.length; i++) {
+                if (i > 0) str += ",";
+                str += JSON.stringify(arr[i]);
+            }
+            return str + "]";
+        }
+    };
+}
+
+WScript.Quit(main());

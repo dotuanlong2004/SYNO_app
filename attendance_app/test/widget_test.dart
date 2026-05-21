@@ -7,6 +7,6 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: AttendanceApp()));
 
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Đăng nhập hệ thống'), findsOneWidget);
   });
 }

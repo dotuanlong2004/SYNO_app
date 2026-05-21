@@ -1,34 +1,19 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
-import 'core/notifications/fcm_service.dart';
-import 'core/notifications/local_notification_service.dart';
 
 // Firebase setup note:
 // - Android: place google-services.json at android/app/google-services.json
 // - iOS: place GoogleService-Info.plist at ios/Runner/GoogleService-Info.plist
-
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  await LocalNotificationService.showAttendanceNotification(message);
-}
+// - Windows: Firebase không hỗ trợ, bỏ qua
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('vi', null);
 
-  // Khởi tạo Firebase
-  await Firebase.initializeApp();
-
-  // Khởi tạo notification services
-  await LocalNotificationService.initialize();
-  await FCMService.initialize();
-
-  // Đăng ký background message handler
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
+  // Firebase đã xóa khỏi pubspec.yaml cho Windows
+  // Sẽ thêm lại trong android/ios pubspec.yaml riêng
   runApp(const ProviderScope(child: AttendanceApp()));
 }

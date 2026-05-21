@@ -18,6 +18,12 @@ class AuthGate extends ConsumerWidget {
     }
 
     if (state.isAuthenticated) {
+      final role = (state.user?.role ?? '').toLowerCase();
+      if (role == 'admin' || role == 'teacher') {
+        // Tài khoản admin/teacher không dùng app mobile - force logout
+        Future.microtask(() => ref.read(authControllerProvider.notifier).signOut());
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
       return const DashboardPage();
     }
 
