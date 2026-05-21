@@ -1,4 +1,4 @@
-# SYNO Attendance App
+# SYNO
 
 SYNO is a Smart School SaaS platform for school admins and parents. The current implementation includes:
 
@@ -38,7 +38,7 @@ They are kept for history only and should not be treated as the current workflow
 Backend:
 
 ```bat
-cmd /c "cd /d d:\attendance_app_dev\backend && npm start"
+cmd /c "cd /d d:\attendance_app_dev && corepack pnpm --filter backend build && corepack pnpm --filter backend start"
 ```
 
 AI-X1 collector:
@@ -49,3 +49,12 @@ d:\attendance_app_dev\hardware-collector\ronald-jack-aix1\bin\Release\net472\Tes
 ```
 
 The old `C:\ZKCollector\x86\ZKCollector.exe --console` flow is no longer the current AI-X1 path.
+
+## Security Baseline
+
+- Repository: `dotuanlong2004/SYNO_app` (private).
+- Never commit `.env`, Firebase service account JSON, `google-services.json`, database dumps, local SQLite files, build output, or package caches.
+- Keep `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `HARDWARE_API_KEY`, Firebase credentials, and device passwords only in local/server environment variables or GitHub Secrets.
+- Frontend and Flutter may use only publishable/anon Supabase keys. Service-role keys are backend/server-only.
+- Business data must remain scoped by `school_id`; do not bypass RLS to make a screen work.
+- Before pushing, run the checks in `SECURITY.md`.

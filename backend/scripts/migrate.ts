@@ -97,7 +97,7 @@ async function runMigrations() {
         }
     } else {
         console.log('⚠️  SUPABASE_DB_URL not found. Trying REST API method...');
-        console.log('💡 Tip: Add SUPABASE_DB_URL=postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres to .env for better reliability');
+        console.log('💡 Tip: Add SUPABASE_DB_URL from Supabase Dashboard to .env for better reliability');
         
         // Execute via Supabase Management API or REST
         // This is limited - recommend using psql or direct connection for production
