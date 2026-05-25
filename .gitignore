@@ -1,5 +1,8 @@
 node_modules/
+.pnpm-store/
 .pub-cache/
+tools/legacy-local/
+reports/
 build/
 dist/
 .dart_tool/

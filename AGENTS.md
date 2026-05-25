@@ -14,7 +14,7 @@ Du an dang dang do, tai lieu cu tung bi lech tien do. Khong duoc code theo tri n
 6. `ROADMAP.md` - lo trinh san pham hien hanh.
 7. File/module lien quan truc tiep den task dang lam.
 
-Chi doc `Luu tru tai lieu du an/markdown_cu_2026-05-20` khi can tra lich su. Khong coi cac file trong do la workflow hien tai.
+Khong coi cac file archive/legacy la workflow hien tai. Neu can tra lich su, uu tien Git history hoac tai lieu docx hien hanh trong `docs/source/project-documents`.
 
 ## 2. External AI Context
 
@@ -159,6 +159,7 @@ Neu mot AI khong co quyen doc cac duong dan tren, no phai noi ro la bi thieu ext
 - Doi tuong: nha truong, phu huynh, admin ky thuat
 - Thanh phan chinh:
   - `admin_web` - React Web Admin
+  - `super_admin_web` - React Super Admin Web rieng cho platform super_admin
   - `attendance_app` - Flutter parent app
   - `backend` - Node/Express API
   - Supabase/PostgreSQL - database, auth, realtime/RLS
@@ -192,6 +193,7 @@ Polling: 3s
 
 - Khong dung flow cu `C:\ZKCollector\x86\ZKCollector.exe --console` cho AI-X1 hien tai.
 - Supabase project dang active va database da co cac bang nghiep vu chinh.
+- Super Admin phai tach rieng: `super_admin_web` + `/api/v1/platform-admin/*`; profile `super_admin` co `school_id=null`, khong gan vao tenant `1`.
 - Strict RLS/grants da apply tren Supabase production ngay 2026-05-20:
   - khong con `anon` table grants tren cac bang nghiep vu da audit;
   - policies da school-scoped theo role + `school_id`;
@@ -257,13 +259,7 @@ d:\attendance_app_dev\hardware-collector\ronald-jack-aix1\bin\Release\net472\Tes
 
 ## 9. Tai Lieu Cu
 
-Tai lieu cu da duoc chuyen vao:
-
-```text
-Luu tru tai lieu du an/markdown_cu_2026-05-20
-```
-
-Nhung file do co the chua dung voi tien do hien tai, vi du con nhac PostgreSQL VPS, Node Local Agent, MITA/ZK flow cu, hoac cac phase da qua. Chi dung de tham khao lich su.
+Tai lieu markdown cu, Node Local Agent, MITA/ZK flow cu va cac phase da qua khong con la workflow hien tai. Neu can tra lich su, dung Git history hoac tai lieu docx hien hanh trong `docs/source/project-documents`.
 
 ## 10. Khi Bat Dau Mot Task Moi
 

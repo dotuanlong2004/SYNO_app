@@ -7,7 +7,6 @@
 
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
-const { attendanceQueue } = require('../queues/attendanceQueue');
 const { hardwareApiKey } = require('../middleware/hardwareApiKey');
 const { recordAttendanceCore } = require('./attendance');
 
@@ -112,32 +111,10 @@ router.post('/scan', hardwareApiKey, async (req, res) => {
             scannedAt,
         });
 
-        let queued = false;
-        let queue_warning = null;
-
-        // Best effort enqueue for async worker side-effects/compatibility; ignore failure.
-        try {
-            await attendanceQueue.add(
-                'scan',
-                {
-                    studentCode,
-                    schoolId,
-                    scannedAtIso: scannedAt.toISOString(),
-                },
-                {}
-            );
-            queued = true;
-        } catch (queueErr) {
-            queue_warning = {
-                message: queueErr.message,
-            };
-            console.warn('Queue add failed, but attendance direct write already completed:', queueErr.message);
-        }
-
         return res.status(200).json({
             ok: true,
-            queued,
-            queue_warning,
+            queued: false,
+            queue_warning: null,
             persisted: !result.blocked,
             duplicate: result.blocked,
             student_id: studentCode,

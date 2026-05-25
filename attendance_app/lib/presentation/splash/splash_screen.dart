@@ -69,9 +69,9 @@ class _SplashScreenState extends State<SplashScreen>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppTheme.primaryRed.withValues(alpha: 0.1),
+              AppTheme.primaryColor.withValues(alpha: 0.1),
               Colors.white,
-              AppTheme.primaryBlue.withValues(alpha: 0.1),
+              AppTheme.deepBlue.withValues(alpha: 0.1),
             ],
           ),
         ),
@@ -86,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const BrandLogo(size: 150),
+                      const BrandLogo.horizontal(width: 280),
                       const SizedBox(height: 40),
                       // Loading indicator với màu thương hiệu
                       SizedBox(
@@ -95,13 +95,13 @@ class _SplashScreenState extends State<SplashScreen>
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            AppTheme.primaryRed,
+                            AppTheme.primaryColor,
                           ),
                         ),
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        'Hệ thống điểm danh thông minh',
+                        'Kết nối - Đồng bộ - Phát triển',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey[600],

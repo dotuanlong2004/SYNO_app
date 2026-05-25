@@ -7,16 +7,35 @@
 
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
+const { mobileAuth } = require('../middleware/mobileAuth');
 
 const router = express.Router();
 
-// Middleware để set school_id từ header
-function setSchoolId(req, res, next) {
-  req.schoolId = req.get('x-school-id') || '1';
-  next();
+function requireAdminWebRole(req, res, next) {
+  const role = String(req.user?.role || '').toLowerCase();
+  if (!['teacher', 'admin'].includes(role)) {
+    return res.status(403).json({
+      ok: false,
+      error: 'Only teacher/admin accounts can access school admin web',
+    });
+  }
+  return next();
 }
 
-router.use(setSchoolId);
+function setSchoolId(req, res, next) {
+  const schoolId = String(req.user?.school_id || '').trim();
+  if (!schoolId) {
+    return res.status(403).json({
+      ok: false,
+      error: 'School admin account is missing school_id',
+    });
+  }
+
+  req.schoolId = schoolId;
+  return next();
+}
+
+router.use(mobileAuth, requireAdminWebRole, setSchoolId);
 
 // GET /admin-web/students
 router.get('/students', async (req, res) => {
@@ -91,6 +110,51 @@ router.get('/grades', async (req, res) => {
     return res.status(500).json({ ok: false, error: error.message });
   }
   return res.json({ ok: true, data });
+});
+
+// GET /admin-web/attendance-logs
+router.get('/attendance-logs', async (req, res) => {
+  const supabase = getSupabase();
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 100), 500));
+  const studentCode = String(req.query.student_code || '').trim();
+  const dateFrom = String(req.query.date_from || '').trim();
+  const dateTo = String(req.query.date_to || '').trim();
+
+  let query = supabase
+    .from('attendance_logs')
+    .select('id, scanned_at, log_type, status_detail, late_minutes, students!inner(student_code, full_name, class_name)')
+    .eq('school_id', req.schoolId)
+    .order('scanned_at', { ascending: false })
+    .limit(limit);
+
+  if (studentCode) {
+    query = query.eq('students.student_code', studentCode);
+  }
+  if (dateFrom) {
+    query = query.gte('scanned_at', `${dateFrom}T00:00:00.000Z`);
+  }
+  if (dateTo) {
+    query = query.lte('scanned_at', `${dateTo}T23:59:59.999Z`);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+
+  return res.json({
+    ok: true,
+    data: (data || []).map((row) => ({
+      id: row.id,
+      scanned_at: row.scanned_at,
+      log_type: row.log_type,
+      status_detail: row.status_detail,
+      late_minutes: row.late_minutes,
+      student_code: row.students?.student_code || '',
+      student_name: row.students?.full_name || '',
+      class_name: row.students?.class_name || '',
+    })),
+  });
 });
 
 // POST /admin-web/students/bulk  — Excel import (upsert by student_code)

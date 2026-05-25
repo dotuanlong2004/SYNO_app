@@ -1,12 +1,12 @@
 # CURRENT STATUS - SYNO
 
-Last checked: 2026-05-21
+Last checked: 2026-05-25
 
 ## Project
 
 - Product name: SYNO
 - Model: Smart School SaaS Platform
-- Main modules: Web Admin, Parent App, Backend API, Supabase/Postgres, AI-X1 collector, FCM notification path
+- Main modules: School Admin Web, Super Admin Web, Parent App, Backend API, Supabase/Postgres, AI-X1 collector, FCM notification path
 - Supabase project: `SYNO APP`
 - Supabase ref: `bimepdqcwpsynjimvenn`
 - Production school tenant: `1` - Huu Nghi School (HNS), website `https://hns.edu.vn/`, levels `primary`, `secondary`, `high_school`
@@ -45,8 +45,8 @@ Last checked: 2026-05-21
   - old `package-lock.json` files removed.
 - Backend code has been migrated from `.js` to `.ts`; production starts from compiled `dist/src/server.js`.
 - Admin Web code/config has been migrated from `.jsx/.js` to `.tsx/.ts`.
-- Legacy `zk-agent` Node scripts have also been migrated from `.js` to `.ts` and run through `tsx`.
-- No `package-lock.json` or active `.js/.jsx` files remain in the Node workspace; the old `ZKCollector` JScript COM bridge was renamed to `bridge.legacy.jscript` because that flow is deprecated for AI-X1.
+- Deprecated `zk-agent` and `ZKCollector` experiments were removed from the active workspace. The current hardware path is `hardware-collector/ronald-jack-aix1`.
+- No `package-lock.json` or active `.js/.jsx` files remain in the Node workspace.
 - Backend `corepack pnpm --filter backend test` is no longer a placeholder. It now runs:
   - TypeScript typecheck for active backend `src` files and test scripts;
   - status-code smoke tests that start the Express app on a temporary port;
@@ -58,6 +58,12 @@ Last checked: 2026-05-21
 - `corepack pnpm --filter backend run check:production` passes with the current local `.env`.
 - AI-X1 collector no longer reads Supabase directly with the anon key.
 - Backend API runs on port `3000`.
+- Super Admin is separated from the school Admin Web:
+  - `admin_web` is only for school-scoped `admin` and `teacher` accounts.
+  - `super_admin_web` is a dedicated React app for platform `super_admin`.
+  - Platform API routes are mounted under `/api/v1/platform-admin`.
+  - `super_admin` profiles are platform-scoped with `school_id = null`; do not attach them to school tenant `1`.
+  - Test Super Admin account is `superadmin@syno.local` with password `123456`.
 - Ronald Jack AI-X1 collector builds and runs from:
 
 ```text
@@ -88,6 +94,7 @@ Polling: 3s
 3. Collector runtime config now reads from environment variables.
    - Defaults remain the verified dev values: AI-X1 `192.168.0.225:4370`, `school_id=1`, backend hardware scan URL on local port `3000`.
    - Production should set `HARDWARE_API_KEY` and `COLLECTOR_REQUIRE_HARDWARE_API_KEY=true`.
+   - `hardware-collector/ronald-jack-aix1/run-collector.ps1` reads `HARDWARE_API_KEY` from `backend/.env`, sets `COLLECTOR_REQUIRE_HARDWARE_API_KEY=true`, and refuses to run if the key is missing.
    - Latest `dotnet build hardware-collector/ronald-jack-aix1 -c Release` passed with 0 warnings and 0 errors.
 
 4. Some repo build outputs are dirty.
@@ -119,7 +126,7 @@ Important public tables/views include:
 ## Current Priority
 
 1. Run a real end-to-end Firebase device-token push test.
-2. Configure the same `HARDWARE_API_KEY` in the AI-X1 collector runtime environment before real deployment.
+2. For real AI-X1 deployment, run the collector through `hardware-collector/ronald-jack-aix1/run-collector.ps1` or set the same `HARDWARE_API_KEY` and `COLLECTOR_REQUIRE_HARDWARE_API_KEY=true` in the service environment.
 3. Continue Web Admin and Parent App features for timetable, grades, fees, and announcements.
 4. Keep documentation current and avoid using archived markdown as workflow guidance.
 5. Keep pnpm/TypeScript regression gates green after every DB/RLS/API change.

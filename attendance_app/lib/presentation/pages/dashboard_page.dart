@@ -109,7 +109,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 const Icon(Icons.school_rounded, color: Colors.white, size: 48),
                 const SizedBox(height: 8),
                 const Text(
-                  'Hữu Nghị School',
+                  'SYNO',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -1621,7 +1621,7 @@ class _ProfileTab extends ConsumerWidget {
                     decoration: BoxDecoration(color: AppTheme.primaryOrange.withAlpha(20), borderRadius: BorderRadius.circular(12)),
                     child: const Icon(Icons.school_rounded, color: AppTheme.primaryOrange, size: 22),
                   ),
-                  title: const Text('Trường Hữu Nghị School', style: TextStyle(fontWeight: FontWeight.w700)),
+                  title: const Text('Trường SYNO', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text('Thông tin nhà trường', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                   onTap: () {},

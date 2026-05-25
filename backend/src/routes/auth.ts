@@ -26,7 +26,7 @@ function formatUserResponse(authUser, profile) {
     email: authUser.email,
     full_name: profile?.full_name || authUser.user_metadata?.full_name || '',
     role: profile?.role || authUser.user_metadata?.role || 'parent',
-    school_id: profile?.school_id || authUser.user_metadata?.school_id || '1',
+    school_id: profile?.school_id ?? authUser.user_metadata?.school_id ?? null,
     class_id: profile?.class_id || null,
     student_code: profile?.student_code || null,
     fcm_token: profile?.fcm_token || null,
@@ -93,13 +93,13 @@ router.post('/login', async (req, res) => {
     let enrichedProfile = profile || null;
     const resolvedRole = profile?.role || data.user.user_metadata?.role || 'parent';
     if (resolvedRole === 'parent' && (!profile?.student_code || !profile?.class_id)) {
-      const schoolId =
-        profile?.school_id || data.user.user_metadata?.school_id || '1';
+    const schoolId =
+        profile?.school_id ?? data.user.user_metadata?.school_id ?? null;
       const { data: linkedStudent } = await getSupabase()
         .from('students')
         .select('student_code, class_name')
         .eq('parent_id', data.user.id)
-        .eq('school_id', schoolId)
+        .eq('school_id', schoolId || '1')
         .order('id', { ascending: true })
         .limit(1)
         .maybeSingle();

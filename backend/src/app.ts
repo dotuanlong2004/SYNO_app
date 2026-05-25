@@ -80,6 +80,9 @@ function createApp() {
   const adminWebRouter = require('./routes/adminWeb');
   app.use('/api/v1/admin-web', adminWebRouter);
 
+  const platformAdminRouter = require('./routes/platformAdmin');
+  app.use('/api/v1/platform-admin', platformAdminRouter);
+
   const hardwareEnabled = process.env.ENABLE_HARDWARE_ROUTE !== 'false';
   if (hardwareEnabled) {
     const { hardwareRouter } = require('./routes/hardware');

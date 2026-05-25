@@ -263,7 +263,7 @@ class CollectorConfig
             BackendUrl = GetEnv("BACKEND_HARDWARE_SCAN_URL", "http://localhost:3000/api/v1/hardware/scan"),
             HardwareApiKey = GetEnv("HARDWARE_API_KEY", ""),
             PollMs = GetIntEnv("AI_X1_POLL_MS", 3000),
-            RequireHardwareApiKey = GetBoolEnv("COLLECTOR_REQUIRE_HARDWARE_API_KEY", false)
+            RequireHardwareApiKey = GetBoolEnv("COLLECTOR_REQUIRE_HARDWARE_API_KEY", true)
         };
     }
 

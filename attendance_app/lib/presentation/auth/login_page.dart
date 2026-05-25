@@ -102,7 +102,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Hệ thống điểm danh thông minh - Hữu Nghị School',
+                          'Nền tảng trường học thông minh dành cho phụ huynh',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Colors.grey[600],
@@ -144,7 +144,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ElevatedButton(
                           onPressed: _submitting ? null : _submit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF28C28), // Màu cam logo
+                            backgroundColor: const Color(0xFF1E88FF),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(

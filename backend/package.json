@@ -10,7 +10,7 @@
     "db:migrate": "tsx scripts/auto-migrate.ts",
     "db:setup": "tsx scripts/auto-migrate.ts",
     "db:auto": "tsx scripts/auto-migrate.ts",
-    "test": "tsc -p tsconfig.json --noEmit && tsx scripts/smoke-status-codes.ts",
+    "test": "tsc -p tsconfig.json --noEmit && tsx scripts/admin-web-account-contract.test.ts && tsx scripts/smoke-status-codes.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:status": "tsx scripts/smoke-status-codes.ts",
     "check:production": "tsx scripts/check-production-readiness.ts --strict",
@@ -33,8 +33,7 @@
     "helmet": "^8.1.0",
     "luxon": "^3.7.2",
     "pg": "^8.20.0",
-    "pg-boss": "^10.1.6",
-    "zkteco-js": "^1.7.1"
+    "pg-boss": "^10.1.6"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

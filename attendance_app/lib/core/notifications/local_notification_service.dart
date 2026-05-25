@@ -6,6 +6,14 @@ class LocalNotificationService {
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
+  static const AndroidNotificationChannel _androidChannel =
+      AndroidNotificationChannel(
+        'attendance_channel',
+        'Attendance Notifications',
+        description: 'Realtime attendance notifications',
+        importance: Importance.max,
+      );
+
   static Future<void> initialize() async {
     if (_initialized) return;
 
@@ -23,6 +31,13 @@ class LocalNotificationService {
     );
 
     await _plugin.initialize(settings: settings);
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidPlugin?.requestNotificationsPermission();
+    await androidPlugin?.createNotificationChannel(_androidChannel);
+
     _initialized = true;
   }
 
@@ -44,9 +59,8 @@ class LocalNotificationService {
       windows: WindowsNotificationDetails(),
     );
 
-    final title = message.notification?.title ?? 'ThÃ´ng bÃ¡o Ä‘iá»ƒm danh';
-    final body =
-        message.notification?.body ?? 'CÃ³ cáº­p nháº­t Ä‘iá»ƒm danh má»›i.';
+    final title = message.notification?.title ?? 'Thong bao diem danh';
+    final body = message.notification?.body ?? 'Co cap nhat diem danh moi.';
 
     await _plugin.show(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,

@@ -1,18 +1,25 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../core/notifications/local_notification_service.dart';
 
 class FcmService {
-  FcmService({required Future<void> Function(String token) onTokenReceived})
-    : _onTokenReceived = onTokenReceived;
+  FcmService({
+    required Future<void> Function(String token) onTokenReceived,
+    Future<void> Function()? onAttendanceMessage,
+  }) : _onTokenReceived = onTokenReceived,
+       _onAttendanceMessage = onAttendanceMessage;
 
   final Future<void> Function(String token) _onTokenReceived;
+  final Future<void> Function()? _onAttendanceMessage;
 
   bool _initialized = false;
+  bool _initializing = false;
 
   Future<void> initialize() async {
-    if (_initialized) return;
+    if (_initialized || _initializing) return;
+    _initializing = true;
 
     try {
       await Firebase.initializeApp();
@@ -41,15 +48,19 @@ class FcmService {
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
         await LocalNotificationService.showAttendanceNotification(message);
+        await _onAttendanceMessage?.call();
       });
 
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        // Hook deep-link navigation here if needed.
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+        await _onAttendanceMessage?.call();
       });
 
       _initialized = true;
-    } catch (_) {
-      // Keep app running in environments without real Firebase keys.
+    } catch (error, stackTrace) {
+      debugPrint('FCM initialize failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _initializing = false;
     }
   }
 }

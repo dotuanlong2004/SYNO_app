@@ -3,25 +3,31 @@ import 'package:flutter/material.dart';
 class AppTheme {
   const AppTheme._();
 
-  // Màu logo Hữu Nghị School
-  static const Color primaryRed = Color(0xFFC62828);      // Đỏ - HỮU NGHỊ
-  static const Color primaryBlue = Color(0xFF1565C0);     // Xanh - SCHOOL
-  static const Color primaryOrange = Color(0xFFF28C28);  // Cam - accent
-  static const Color primaryOrangeDark = Color(0xFFD97512);
-  static const Color starYellow = Color(0xFFFFC107);      // Vàng ngôi sao
-  
-  static const Color skyBlue = Color(0xFFF28C28);
+  static const Color primaryColor = Color(0xFF1E88FF);
+  static const Color deepBlue = Color(0xFF0D47A1);
+  static const Color accentOrange = Color(0xFFFF9800);
+  static const Color successColor = Color(0xFF22C55E);
+  static const Color errorColor = Color(0xFFEF4444);
+  static const Color textPrimary = Color(0xFF0F172A);
+  static const Color textSecondary = Color(0xFF64748B);
+
   static const Color softWhite = Color(0xFFFFFFFF);
-  static const Color lightGrayBackground = Color(0xFFFFF7EE);
-  static const Color mutedText = Color(0xFF5E6A7D);
+  static const Color lightGrayBackground = Color(0xFFF8FAFC);
+  static const Color mutedText = textSecondary;
+  static const Color primaryRed = deepBlue;
+  static const Color primaryBlue = primaryColor;
+  static const Color primaryOrange = accentOrange;
+  static const Color primaryOrangeDark = Color(0xFFF57C00);
+  static const Color skyBlue = primaryColor;
 
   static ThemeData get light {
     const colorScheme = ColorScheme.light(
-      primary: primaryOrange,
-      secondary: primaryOrangeDark,
+      primary: primaryColor,
+      secondary: accentOrange,
       surface: softWhite,
       onPrimary: Colors.white,
-      onSurface: Color(0xFF1A1F2E),
+      onSurface: textPrimary,
+      error: errorColor,
     );
 
     return ThemeData(
@@ -29,7 +35,7 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: lightGrayBackground,
       appBarTheme: const AppBarTheme(
-        backgroundColor: skyBlue,
+        backgroundColor: deepBlue,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
@@ -38,17 +44,18 @@ class AppTheme {
         color: softWhite,
         elevation: 0,
         shadowColor: Colors.black.withAlpha(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         margin: EdgeInsets.zero,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: skyBlue,
+          backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          minimumSize: const Size.fromHeight(52),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
       textTheme: const TextTheme(
@@ -56,7 +63,7 @@ class AppTheme {
         titleMedium: TextStyle(fontWeight: FontWeight.w600),
         bodyMedium: TextStyle(color: mutedText),
       ),
-      iconTheme: const IconThemeData(color: skyBlue),
+      iconTheme: const IconThemeData(color: primaryColor),
     );
   }
 }

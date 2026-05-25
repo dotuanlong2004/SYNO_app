@@ -18,13 +18,19 @@ Read these files first before changing code:
 3. `HUONG_DAN_CHAY_AI_X1.md` - confirmed AI-X1 collector runbook.
 4. `ROADMAP.md` - current product roadmap aligned with the planning document.
 
-Older markdown files were moved to:
+Project documents are organized under `docs/`. Old markdown drafts and deprecated ZK experiments are not part of the current workflow. Use the current files listed above and the `hardware-collector/ronald-jack-aix1` collector only.
+
+## Repository Layout
 
 ```text
-Lưu trữ tài liệu dự án/markdown_cu_2026-05-20
+admin_web/          React Admin Web
+attendance_app/     Flutter Parent App
+backend/            Node/Express API
+hardware-collector/ Ronald Jack AI-X1 collector
+supabase/           Database migrations and Edge Functions
+docs/               Requirements, security docs, reports, source documents
+tools/              Local helper tools and ignored legacy artifacts
 ```
-
-They are kept for history only and should not be treated as the current workflow.
 
 ## Supabase Project
 

@@ -1,15 +1,18 @@
 # PROJECT MEMORY — SYNO (Persistent Engineering Context)
 
-Nguồn tổng hợp: `Lưu trữ tài liệu dự án/SYNO_Master_AI_Engineering_Manual_Merged_Final.docx` (nội dung tương đương file PDF cùng thư mục).
+Nguồn tổng hợp: `docs/source/project-documents/SYNO_Master_AI_Engineering_Manual_Merged_Final.docx` (nội dung tương đương file PDF cùng thư mục).
 
 ## 1) DB URL status (quan trọng)
 
-- `SUPABASE_URL` hiện tại hợp lệ và đã truy cập được (`HTTP 200` từ Supabase REST/OpenAPI).
-- `SUPABASE_DB_URL` trong `backend/.env` **đang sai/stale** (tenant/user không khớp project ref hiện tại), đã từng trả lỗi dạng:
-  - `tenant/user ... not found`
-- Project ref đang dùng thực tế: `bimepdqcwpsynjimvenn`.
+- `SUPABASE_URL` hiện tại hợp lệ và trỏ về project SYNO: `bimepdqcwpsynjimvenn`.
+- `SUPABASE_DB_URL` local trong `backend/.env` đã được sửa sang Supabase pooler đúng project:
+  - host: `aws-1-ap-southeast-1.pooler.supabase.com`
+  - user dạng: `postgres.bimepdqcwpsynjimvenn`
+  - database: `postgres`
+- Direct host `db.bimepdqcwpsynjimvenn.supabase.co:5432` có thể IPv6-only từ Windows network hiện tại, nên local runtime ưu tiên pooler URL.
+- `corepack pnpm --filter backend run check:production` ngày 2026-05-25 xác nhận DB URL đúng tenant và kết nối pg-boss được.
 
-> Kết luận: để thao tác Postgres trực tiếp, cần cập nhật lại `SUPABASE_DB_URL` đúng theo project hiện tại.
+> Kết luận: không coi `SUPABASE_DB_URL` local là stale nữa. Nếu môi trường khác báo lỗi tenant/user, kiểm tra lại connection string trong `.env` của môi trường đó, không mở RLS/grant rộng để chữa cháy.
 
 ---
 
@@ -229,7 +232,7 @@ Khi nâng cấp dự án, luôn đọc file này trước khi sửa code để b
 - Git/repo identity cần nhớ khi làm việc: **SYNO**
 - Remote workspace hiện tại đang map tới repository:
   - `origin: https://github.com/dotuanlong2004/attendance_app.git`
-- Khi viết docs/report/plan cho người dùng, luôn gọi hệ thống là **SYNO** thay vì tên module rời (`attendance_app`, `backend`, `zk-agent`).
+- Khi viết docs/report/plan cho người dùng, luôn gọi hệ thống là **SYNO** thay vì tên module rời (`attendance_app`, `backend`, `hardware-collector`).
 
 ---
 
@@ -387,7 +390,7 @@ Trước mọi task:
   - `backend/`
   - `admin_web/`
   - `attendance_app/`
-  - `zk-agent/`
+  - `hardware-collector/`
   - `supabase/`
 - xác định đây là task:
   - backend
@@ -436,7 +439,7 @@ Kết quả mọi task phải nêu rõ:
   - API nghiệp vụ
   - queue/background jobs
   - tích hợp FCM
-  - tích hợp attendance device qua `zkteco-js`
+  - nhận dữ liệu điểm danh từ collector AI-X1 qua Backend API
 - phải ưu tiên rules:
   - service layer rõ ràng
   - auth + school isolation
@@ -460,8 +463,9 @@ Kết quả mọi task phải nêu rõ:
   - không nhúng logic quyền nghiệp vụ vào client
   - push/realtime phải an toàn và đúng tenant
 
-### 18.5 `zk-agent/` và `ZKCollector/`
-- lớp tích hợp attendance hardware / SDK / network / Windows service
+### 18.5 `hardware-collector/`
+- lớp tích hợp attendance hardware AI-X1 qua COM SDK
+- collector hiện hành: `hardware-collector/ronald-jack-aix1`
 - đây là vùng nhạy cảm:
   - dễ phát sinh duplicate logs
   - dễ lệch protocol
@@ -504,3 +508,15 @@ Kết quả mọi task phải nêu rõ:
    - support assistant nội bộ
    - semantic search docs/manual/policy
    - content generation cho thông báo, nhưng luôn qua business validation
+
+---
+
+## 20) Super Admin platform separation (May 25, 2026)
+
+- `super_admin` is platform-scoped and must have `school_id = null`; do not bind Super Admin accounts to tenant `1`.
+- `admin_web` is only for school-scoped `admin` and `teacher` accounts.
+- `super_admin_web` is the dedicated React app for platform-level administration.
+- Backend school-admin APIs stay under `/api/v1/admin-web/*` and must derive `school_id` from the authenticated user profile.
+- Backend platform-admin APIs stay under `/api/v1/platform-admin/*` and must require `role = super_admin`.
+- Platform UI/API responsibilities include school CRUD, school admin/teacher account management, Super Admin account management, password reset, active/inactive status, and platform audit logs.
+- User requested test account passwords to be `123456`. Current Super Admin target account is `superadmin@syno.local`; the Super Admin test login is `superadmin@syno.local` / `123456` with `school_id = null`.

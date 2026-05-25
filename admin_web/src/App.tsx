@@ -1,12 +1,24 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
+import {
+  attendanceStatusLabel,
+  dayLabel,
+  formatCurrency,
+  formatDateTime,
+  matchesTextSearch,
+  paymentStatusClass,
+  paymentStatusLabel,
+  roleLabel,
+} from './adminUi';
+import synoLogo from './assets/brand/syno-logo-horizontal.png';
 
 // Use Vite environment variables (VITE_ prefix required)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
 const DEFAULT_SCHOOL_ID = import.meta.env.VITE_DEFAULT_SCHOOL_ID || '1';
-const ADMIN_WEB_API = `${API_BASE}/admin-web`; // No auth required
+const ADMIN_WEB_API = `${API_BASE}/admin-web`;
 const AUTH_TOKEN_KEY = 'admin_web_token';
 const AUTH_USER_KEY  = 'admin_web_user';
+const API_CONNECTION_ERROR = 'Không thể kết nối đến backend SYNO. Hãy kiểm tra API server đang chạy ở http://127.0.0.1:3000.';
 
 // ─── Màn hình đăng nhập ─────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
@@ -40,7 +52,7 @@ function LoginScreen({ onLogin }) {
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(json.user));
       onLogin(json.access_token, json.user);
     } catch {
-      setError('Không thể kết nối đến server. Kiểm tra backend có đang chạy không.');
+      setError(API_CONNECTION_ERROR);
     } finally {
       setLoading(false);
     }
@@ -56,9 +68,13 @@ function LoginScreen({ onLogin }) {
         padding: '2.5rem 2rem', width: 380, maxWidth: '95vw',
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🏫</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1e293b', margin: 0 }}>Cổng Quản Trị</h1>
-          <p style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Dành cho Admin &amp; Giáo viên</p>
+          <img
+            src={synoLogo}
+            alt="SYNO"
+            style={{ width: 220, maxWidth: '100%', margin: '0 auto 12px', display: 'block' }}
+          />
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>Cổng quản trị SYNO</h1>
+          <p style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Nền tảng SaaS cho nhiều trường</p>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 14 }}>
@@ -87,7 +103,7 @@ function LoginScreen({ onLogin }) {
             type="submit" disabled={loading}
             style={{
               width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
-              background: loading ? '#94a3b8' : '#ea7c1e', color: '#fff',
+              background: loading ? '#94a3b8' : '#1E88FF', color: '#fff',
               fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'background 0.2s',
             }}
@@ -106,10 +122,43 @@ const inputStyle: CSSProperties = {
   boxSizing: 'border-box', color: '#1e293b',
 };
 
+function ModuleSearch({ value, onChange, placeholder, count, total }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <input
+        className="min-w-64 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-700"
+        >
+          Xóa lọc
+        </button>
+      ) : null}
+      <span className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500">
+        {count}/{total}
+      </span>
+    </div>
+  );
+}
+
+function EmptyState({ message }) {
+  return (
+    <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+      {message}
+    </div>
+  );
+}
+
 // ─── AppShell: Toàn bộ Admin UI (chỉ render khi đã đăng nhập) ──────────────
-function AppShell({ authUser, onLogout }) {
+function AppShell({ authToken, authUser, onLogout }) {
   const [tab, setTab] = useState('students');
-  const [schoolId] = useState(DEFAULT_SCHOOL_ID);
+  const schoolId = String(authUser.school_id || DEFAULT_SCHOOL_ID);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -165,9 +214,18 @@ function AppShell({ authUser, onLogout }) {
     midterm_score: '0',
     final_score: '0',
   });
-
+  const [attendanceLogs, setAttendanceLogs] = useState([]);
+  const [attendanceFilters, setAttendanceFilters] = useState({
+    student_code: '',
+    date_from: '',
+    date_to: '',
+  });
   // Student search
   const [studentSearch, setStudentSearch] = useState('');
+  const [timetableSearch, setTimetableSearch] = useState('');
+  const [feeSearch, setFeeSearch] = useState('');
+  const [announcementSearch, setAnnouncementSearch] = useState('');
+  const [gradeSearch, setGradeSearch] = useState('');
 
   // Excel import state (students)
   const [importLoading, setImportLoading] = useState(false);
@@ -196,9 +254,9 @@ function AppShell({ authUser, onLogout }) {
   const adminHeaders = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      'x-school-id': schoolId,
+      Authorization: `Bearer ${authToken}`,
     }),
-    [schoolId],
+    [authToken],
   );
 
   // Load data khi mount component (không cần token)
@@ -211,14 +269,16 @@ function AppShell({ authUser, onLogout }) {
       requestJson(`${ADMIN_WEB_API}/timetables`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/fees`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/announcements`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders })
+      requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
     ])
-      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson]) => {
+      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson, attendanceJson]) => {
         setStudents(studentsJson.data || []);
         setTimetables(timetablesJson.data || []);
         setFees(feesJson.data || []);
         setAnnouncements(announcementsJson.data || []);
         setGrades(gradesJson.data || []);
+        setAttendanceLogs(attendanceJson.data || []);
       })
       .catch((error) => {
         setMessage(error.message);
@@ -226,10 +286,15 @@ function AppShell({ authUser, onLogout }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [schoolId, adminHeaders]);
+  }, [adminHeaders]);
 
   async function requestJson(url, options = {}) {
-    const response = await fetch(url, options);
+    let response;
+    try {
+      response = await fetch(url, options);
+    } catch {
+      throw new Error(API_CONNECTION_ERROR);
+    }
     const text = await response.text();
     const contentType = response.headers.get('content-type') || '';
 
@@ -320,16 +385,79 @@ function AppShell({ authUser, onLogout }) {
     }
   }
 
+  async function loadAttendanceLogs() {
+    try {
+      const params = new URLSearchParams();
+      if (attendanceFilters.student_code) params.set('student_code', attendanceFilters.student_code);
+      if (attendanceFilters.date_from) params.set('date_from', attendanceFilters.date_from);
+      if (attendanceFilters.date_to) params.set('date_to', attendanceFilters.date_to);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const json = await requestJson(`${ADMIN_WEB_API}/attendance-logs${suffix}`, {
+        headers: adminHeaders,
+      });
+      setAttendanceLogs(json.data || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  function exportAttendanceExcel() {
+    const rows = attendanceLogs.map((log) => ({
+      'Mã học sinh': log.student_code,
+      'Họ tên': log.student_name,
+      Lớp: log.class_name,
+      'Thời gian': new Date(log.scanned_at).toLocaleString('vi-VN'),
+      'Loại': log.log_type === 'check_out' ? 'Ra' : 'Vào',
+      'Trạng thái': log.status_detail,
+      'Phút muộn': log.late_minutes ?? '',
+    }));
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Diem danh');
+    XLSX.writeFile(book, `diem-danh-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+
   const filteredStudents = useMemo(() => {
-    if (!studentSearch.trim()) return students;
-    const q = studentSearch.trim().toLowerCase();
-    return students.filter(
-      (s) =>
-        (s.student_code || '').toLowerCase().includes(q) ||
-        (s.full_name || '').toLowerCase().includes(q) ||
-        (s.class_name || '').toLowerCase().includes(q),
+    return students.filter((student) =>
+      matchesTextSearch(student, studentSearch, ['student_code', 'full_name', 'class_name', 'parent_name'])
     );
   }, [students, studentSearch]);
+
+  const filteredTimetables = useMemo(() => {
+    return timetables.filter((item) =>
+      matchesTextSearch(item, timetableSearch, ['class_id', 'subject_name', 'teacher_name', 'room', 'period'])
+    );
+  }, [timetables, timetableSearch]);
+
+  const filteredFees = useMemo(() => {
+    return fees.filter((item) =>
+      matchesTextSearch(item, feeSearch, ['student_code', 'class_id', 'payment_status', 'payment_method'])
+    );
+  }, [fees, feeSearch]);
+
+  const filteredAnnouncements = useMemo(() => {
+    return announcements.filter((item) =>
+      matchesTextSearch(item, announcementSearch, ['title', 'content'])
+    );
+  }, [announcements, announcementSearch]);
+
+  const filteredGrades = useMemo(() => {
+    return grades.filter((item) =>
+      matchesTextSearch(item, gradeSearch, ['student_code', 'subject_name', 'semester', 'school_year'])
+    );
+  }, [grades, gradeSearch]);
+
+  const adminStats = useMemo(() => {
+    const paidFees = fees.filter((item) => String(item.payment_status || '').toLowerCase() === 'paid').length;
+    const latestAttendance = attendanceLogs[0]?.scanned_at ? formatDateTime(attendanceLogs[0].scanned_at) : 'Chưa có';
+    return [
+      ['Học sinh', students.length],
+      ['TKB', timetables.length],
+      ['Khoản phí đã thu', `${paidFees}/${fees.length}`],
+      ['Điểm danh mới nhất', latestAttendance],
+    ];
+  }, [students.length, timetables.length, fees, attendanceLogs]);
 
   function showImportToast(type, message) {
     setImportToast({ type, message });
@@ -972,17 +1100,26 @@ function AppShell({ authUser, onLogout }) {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <h1 className="mr-3 text-xl font-bold">Danh sách học sinh</h1>
+          <div className="mr-3 flex items-center gap-3">
+            <img src={synoLogo} alt="SYNO" className="h-12 w-auto" />
+            <div>
+              <h1 className="text-xl font-bold text-slate-950">SYNO Admin</h1>
+              <p className="text-xs font-medium text-slate-500">Kết nối - Đồng bộ - Phát triển</p>
+            </div>
+          </div>
           <button
             onClick={loadStudents}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
           >
             Tải danh sách học sinh
           </button>
+          <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600">
+            Trường {schoolId}
+          </span>
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm text-slate-500">
               👤 <strong>{authUser.full_name || authUser.email}</strong>
-              <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700 uppercase">{authUser.role}</span>
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">{roleLabel(authUser.role)}</span>
             </span>
             <button
               onClick={onLogout}
@@ -995,7 +1132,16 @@ function AppShell({ authUser, onLogout }) {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          {adminStats.map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+              <div className="mt-1 text-xl font-bold text-slate-950">{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
           {[
             ['students', 'Quản lý Học sinh'],
             ['provision', 'Cấp tài khoản Phụ huynh'],
@@ -1004,6 +1150,7 @@ function AppShell({ authUser, onLogout }) {
             ['fees', 'Học phí & Thu phí'],
             ['announcements', 'Thông báo'],
             ['grades', 'Bảng điểm'],
+            ['attendance', 'Điểm danh'],
             ['device', 'Giả lập Quẹt thẻ'],
           ].map(([value, label]) => (
             <button
@@ -1025,6 +1172,7 @@ function AppShell({ authUser, onLogout }) {
             {message}
           </div>
         ) : null}
+
 
         {tab === 'students' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -1169,7 +1317,7 @@ function AppShell({ authUser, onLogout }) {
               </span>
             </div>
 
-            {loading ? <p>Đang tải dữ liệu...</p> : null}
+            {loading ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">Đang tải dữ liệu...</p> : null}
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead>
@@ -1209,6 +1357,7 @@ function AppShell({ authUser, onLogout }) {
                 </tbody>
               </table>
             </div>
+            {!loading && filteredStudents.length === 0 ? <EmptyState message="Chưa có học sinh phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 
@@ -1457,6 +1606,13 @@ function AppShell({ authUser, onLogout }) {
                 </button>
               ) : null}
             </form>
+            <ModuleSearch
+              value={timetableSearch}
+              onChange={setTimetableSearch}
+              placeholder="Tìm theo lớp, môn học, giáo viên, phòng..."
+              count={filteredTimetables.length}
+              total={timetables.length}
+            />
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead>
@@ -1471,11 +1627,11 @@ function AppShell({ authUser, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {timetables.map((t) => (
+                  {filteredTimetables.map((t) => (
                     <tr key={t.id} className="border-b">
                       <td className="py-2">{t.class_id}</td>
                       <td className="py-2">{t.subject_name}</td>
-                      <td className="py-2">{`Thứ ${Number(t.day_of_week) + 1}`}</td>
+                      <td className="py-2">{dayLabel(t.day_of_week)}</td>
                       <td className="py-2">{t.period || '-'}</td>
                       <td className="py-2">{`${String(t.start_time).slice(0, 5)}-${String(t.end_time).slice(0, 5)}`}</td>
                       <td className="py-2">{`${t.teacher_name || '-'} / ${t.room || '-'}`}</td>
@@ -1500,6 +1656,7 @@ function AppShell({ authUser, onLogout }) {
                 </tbody>
               </table>
             </div>
+            {filteredTimetables.length === 0 ? <EmptyState message="Chưa có tiết học phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 
@@ -1590,13 +1747,20 @@ function AppShell({ authUser, onLogout }) {
                 </button>
               ) : null}
             </form>
+            <ModuleSearch
+              value={feeSearch}
+              onChange={setFeeSearch}
+              placeholder="Tìm theo mã học sinh, lớp, trạng thái, phương thức..."
+              count={filteredFees.length}
+              total={fees.length}
+            />
             <div className="space-y-2">
-              {fees.map((f) => (
+              {filteredFees.map((f) => (
                 <div key={f.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div>
                       <strong>{f.student_code}</strong> • {f.class_id || '-'} •{' '}
-                      <span>{Number(f.total_amount).toLocaleString('vi-VN')} đ</span>
+                      <span>{formatCurrency(f.total_amount)}</span>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -1613,12 +1777,17 @@ function AppShell({ authUser, onLogout }) {
                       </button>
                     </div>
                   </div>
-                  <div className="text-slate-600">
-                    Trạng thái: {f.payment_status} | Phương thức: {f.payment_method || '-'} | Thời gian: {f.paid_at || '-'}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-600">
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${paymentStatusClass(f.payment_status)}`}>
+                      {paymentStatusLabel(f.payment_status)}
+                    </span>
+                    <span>Phương thức: {f.payment_method || '-'}</span>
+                    <span>Thời gian: {formatDateTime(f.paid_at)}</span>
                   </div>
                 </div>
               ))}
             </div>
+            {filteredFees.length === 0 ? <EmptyState message="Chưa có khoản phí phù hợp với bộ lọc." /> : null}
 
             {/* ── Excel Import fees ── */}
             <div className="mt-4 rounded-lg border border-dashed border-orange-300 bg-orange-50 p-4">
@@ -1703,8 +1872,15 @@ function AppShell({ authUser, onLogout }) {
                 Đăng thông báo
               </button>
             </form>
+            <ModuleSearch
+              value={announcementSearch}
+              onChange={setAnnouncementSearch}
+              placeholder="Tìm theo tiêu đề hoặc nội dung thông báo..."
+              count={filteredAnnouncements.length}
+              total={announcements.length}
+            />
             <div className="space-y-2">
-              {announcements.map((item) => (
+              {filteredAnnouncements.map((item) => (
                 <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <strong>{item.title}</strong>
@@ -1719,6 +1895,7 @@ function AppShell({ authUser, onLogout }) {
                 </div>
               ))}
             </div>
+            {filteredAnnouncements.length === 0 ? <EmptyState message="Chưa có thông báo phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 
@@ -1762,8 +1939,15 @@ function AppShell({ authUser, onLogout }) {
                 Thêm điểm
               </button>
             </form>
+            <ModuleSearch
+              value={gradeSearch}
+              onChange={setGradeSearch}
+              placeholder="Tìm theo mã học sinh, môn học, học kỳ..."
+              count={filteredGrades.length}
+              total={grades.length}
+            />
             <div className="space-y-2">
-              {grades.map((item) => (
+              {filteredGrades.map((item) => (
                 <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1782,6 +1966,7 @@ function AppShell({ authUser, onLogout }) {
                 </div>
               ))}
             </div>
+            {filteredGrades.length === 0 ? <EmptyState message="Chưa có bảng điểm phù hợp với bộ lọc." /> : null}
 
             {/* ── Excel Import grades ── */}
             <div className="mt-4 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 p-4">
@@ -1829,6 +2014,89 @@ function AppShell({ authUser, onLogout }) {
                 </div>
               )}
             </div>
+          </section>
+        ) : null}
+
+        {tab === 'attendance' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <div className="mb-4 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Học sinh</label>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={attendanceFilters.student_code}
+                  onChange={(e) => setAttendanceFilters((prev) => ({ ...prev, student_code: e.target.value }))}
+                >
+                  <option value="">Tất cả học sinh</option>
+                  {students.map((s) => (
+                    <option key={s.id} value={s.student_code}>
+                      {s.student_code} - {s.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Từ ngày</label>
+                <input
+                  type="date"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={attendanceFilters.date_from}
+                  onChange={(e) => setAttendanceFilters((prev) => ({ ...prev, date_from: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Đến ngày</label>
+                <input
+                  type="date"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={attendanceFilters.date_to}
+                  onChange={(e) => setAttendanceFilters((prev) => ({ ...prev, date_to: e.target.value }))}
+                />
+              </div>
+              <button
+                onClick={loadAttendanceLogs}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Lọc dữ liệu
+              </button>
+              <button
+                onClick={exportAttendanceExcel}
+                disabled={attendanceLogs.length === 0}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              >
+                Xuất Excel
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b text-slate-500">
+                    <th className="py-2">Thời gian</th>
+                    <th className="py-2">Mã học sinh</th>
+                    <th className="py-2">Họ tên</th>
+                    <th className="py-2">Lớp</th>
+                    <th className="py-2">Loại</th>
+                    <th className="py-2">Trạng thái</th>
+                    <th className="py-2">Phút muộn</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceLogs.map((log) => (
+                    <tr key={log.id} className="border-b">
+                      <td className="py-2">{formatDateTime(log.scanned_at)}</td>
+                      <td className="py-2">{log.student_code}</td>
+                      <td className="py-2">{log.student_name}</td>
+                      <td className="py-2">{log.class_name || '-'}</td>
+                      <td className="py-2">{log.log_type === 'check_out' ? 'Ra' : 'Vào'}</td>
+                      <td className="py-2">{attendanceStatusLabel(log.status_detail)}</td>
+                      <td className="py-2">{log.late_minutes ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {attendanceLogs.length === 0 ? <EmptyState message="Chưa có dữ liệu điểm danh theo bộ lọc hiện tại." /> : null}
           </section>
         ) : null}
 
@@ -1889,7 +2157,7 @@ function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  return <AppShell authUser={authUser} onLogout={handleLogout} />;
+  return <AppShell authToken={authToken} authUser={authUser} onLogout={handleLogout} />;
 }
 
 export default App;

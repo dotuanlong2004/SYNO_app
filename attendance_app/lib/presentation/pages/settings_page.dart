@@ -227,14 +227,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               children: [
                 ListTile(
                   leading: Icon(Icons.info_outline, color: Colors.grey[600]),
-                  title: const Text('Về HNSEDU'),
+                  title: const Text('Về SYNO'),
                   subtitle: const Text('Phiên bản 1.0.0'),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: Icon(Icons.school, color: Colors.grey[600]),
-                  title: const Text('HUU NGHĪ SCHOOL'),
-                  subtitle: const Text('Hệ thống điểm danh thông minh'),
+                  title: const Text('SYNO'),
+                  subtitle: const Text('Nền tảng trường học thông minh'),
                 ),
               ],
             ),

@@ -17,7 +17,7 @@ const TZ = process.env.ATTENDANCE_TIMEZONE || 'Asia/Ho_Chi_Minh';
 async function clearInvalidFcmToken(userId) {
     const supabase = getSupabase();
     await supabase
-        .from('users')
+        .from('user_profiles')
         .update({ fcm_token: null, updated_at: new Date().toISOString() })
         .eq('id', userId);
 }
@@ -27,6 +27,54 @@ function formatLocalTime(iso) {
         return DateTime.fromJSDate(iso).setZone(TZ).toFormat('HH:mm');
     }
     return DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(TZ).toFormat('HH:mm');
+}
+
+async function getStudentNotificationTarget(supabase, studentId) {
+    const { data: student, error: studentError } = await supabase
+        .from('students')
+        .select('id, student_code, full_name, parent_id')
+        .eq('id', studentId)
+        .single();
+
+    if (studentError || !student?.parent_id) {
+        return { student: student || null, parent: null };
+    }
+
+    const { data: parent } = await supabase
+        .from('user_profiles')
+        .select('id, fcm_token')
+        .eq('id', student.parent_id)
+        .maybeSingle();
+
+    return { student, parent: parent || null };
+}
+
+async function sendAttendancePush({ student, parent, studentCode, logType, scannedAt }) {
+    if (!student || !parent?.fcm_token) return;
+
+    const verb = logType === 'check_in' ? 'vao' : 'ra';
+    const localTime = formatLocalTime(scannedAt);
+
+    try {
+        await sendPushNotification({
+            token: parent.fcm_token,
+            title: 'Thong bao diem danh',
+            body: `Hoc sinh ${student.full_name || studentCode} da diem danh ${verb} luc ${localTime}.`,
+            data: {
+                student_id: String(student.id),
+                student_code: studentCode,
+                check_type: verb,
+                log_type: logType,
+                check_time: scannedAt.toISOString(),
+            },
+        });
+    } catch (error) {
+        if (isUnregisteredTokenError(error)) {
+            await clearInvalidFcmToken(parent.id);
+        } else {
+            console.error('[attendance-sync] FCM send failed:', error.message);
+        }
+    }
 }
 
 router.post('/sync', async (req, res) => {
@@ -114,12 +162,7 @@ router.post('/sync', async (req, res) => {
             return res.status(404).json({ ok: false, error: rpcResult.error_message });
         }
 
-        // Get student info for FCM
-        const { data: student } = await supabase
-            .from('students')
-            .select('id, full_name, parent_id, parent:fcm_token')
-            .eq('id', rpcResult.student_id)
-            .single();
+        const { student, parent } = await getStudentNotificationTarget(supabase, rpcResult.student_id);
 
         // Set spam block (10 min TTL)
         await supabase
@@ -130,31 +173,13 @@ router.post('/sync', async (req, res) => {
                 expires_at: new Date(Date.now() + 600000).toISOString()
             }, { onConflict: 'school_id,student_code' });
 
-        // Send FCM notification
-        if (student?.parent?.fcm_token) {
-            const verb = rpcResult.log_type === 'check_in' ? 'Vào' : 'Ra';
-            const localTime = formatLocalTime(scannedAt);
-            try {
-                await sendPushNotification({
-                    token: student.parent.fcm_token,
-                    title: 'Thông báo điểm danh',
-                    body: `Học sinh ${student.full_name} đã điểm danh ${verb} lúc ${localTime}.`,
-                    data: {
-                        student_id: String(student.id),
-                        student_code: studentCode,
-                        check_type: verb,
-                        log_type: rpcResult.log_type,
-                        check_time: scannedAt.toISOString(),
-                    },
-                });
-            } catch (error) {
-                if (isUnregisteredTokenError(error)) {
-                    await clearInvalidFcmToken(student.parent_id);
-                } else {
-                    console.error('[attendance-sync] FCM send failed:', error.message);
-                }
-            }
-        }
+        await sendAttendancePush({
+            student,
+            parent,
+            studentCode,
+            logType: rpcResult.log_type,
+            scannedAt,
+        });
 
         return res.status(200).json({
             ok: true,
@@ -245,11 +270,7 @@ async function recordAttendanceCore({ studentCode, schoolId, scannedAt }) {
         throw error;
     }
 
-    const { data: student } = await supabase
-        .from('students')
-        .select('id, full_name, parent_id, parent:fcm_token')
-        .eq('id', rpcResult.student_id)
-        .single();
+    const { student, parent } = await getStudentNotificationTarget(supabase, rpcResult.student_id);
 
     await supabase
         .from('attendance_spam_logs')
@@ -259,30 +280,13 @@ async function recordAttendanceCore({ studentCode, schoolId, scannedAt }) {
             expires_at: new Date(Date.now() + 600000).toISOString()
         }, { onConflict: 'school_id,student_code' });
 
-    if (student?.parent?.fcm_token) {
-        const verb = rpcResult.log_type === 'check_in' ? 'Vào' : 'Ra';
-        const localTime = formatLocalTime(scannedAt);
-        try {
-            await sendPushNotification({
-                token: student.parent.fcm_token,
-                title: 'Thông báo điểm danh',
-                body: `Học sinh ${student.full_name} đã điểm danh ${verb} lúc ${localTime}.`,
-                data: {
-                    student_id: String(student.id),
-                    student_code: studentCode,
-                    check_type: verb,
-                    log_type: rpcResult.log_type,
-                    check_time: scannedAt.toISOString(),
-                },
-            });
-        } catch (error) {
-            if (isUnregisteredTokenError(error)) {
-                await clearInvalidFcmToken(student.parent_id);
-            } else {
-                console.error('[attendance-sync] FCM send failed:', error.message);
-            }
-        }
-    }
+    await sendAttendancePush({
+        student,
+        parent,
+        studentCode,
+        logType: rpcResult.log_type,
+        scannedAt,
+    });
 
     return {
         ok: true,
@@ -347,6 +351,22 @@ async function handleAttendanceFallbackCore(supabase, studentCode, schoolId, sca
             student_code: studentCode,
             expires_at: new Date(Date.now() + 600000).toISOString()
         }, { onConflict: 'school_id,student_code' });
+
+    const { data: parent } = student.parent_id
+        ? await supabase
+            .from('user_profiles')
+            .select('id, fcm_token')
+            .eq('id', student.parent_id)
+            .maybeSingle()
+        : { data: null };
+
+    await sendAttendancePush({
+        student,
+        parent: parent || null,
+        studentCode,
+        logType: nextLogType,
+        scannedAt,
+    });
 
     return {
         ok: true,

@@ -1,7 +1,7 @@
 packages:
   - backend
   - admin_web
-  - zk-agent
+  - super_admin_web
 allowBuilds:
   '@firebase/util': true
   esbuild: true

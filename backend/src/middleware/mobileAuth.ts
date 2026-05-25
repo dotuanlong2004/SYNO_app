@@ -50,7 +50,7 @@ async function mobileAuth(req, res, next) {
     // Get user profile for additional data
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('role, class_id, student_code, school_id, full_name')
+      .select('role, class_id, student_code, school_id, full_name, is_active')
       .eq('id', user.id)
       .single();
     debugLog('pre-fix', 'H3', 'src/middleware/mobileAuth.js:mobileAuth', 'Profile lookup result', {
@@ -87,6 +87,10 @@ async function mobileAuth(req, res, next) {
           .maybeSingle();
         resolvedClassId = byCode?.class_name || null;
       }
+    }
+
+    if (profile && profile.is_active === false) {
+      return res.status(403).json({ ok: false, error: 'Forbidden', message: 'User account is inactive' });
     }
 
     req.user = {

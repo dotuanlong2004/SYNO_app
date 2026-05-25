@@ -16,6 +16,7 @@ import '../../data/datasources/timetable_remote_data_source.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
 import '../../data/repositories/students_repository_impl.dart';
 import '../../data/repositories/timetable_repository_impl.dart';
+import '../../data/services/fcm_service.dart';
 import '../../domain/auth/auth_state.dart';
 import '../../domain/auth/login_result.dart';
 import '../../domain/auth/parent_registration_result.dart';
@@ -43,6 +44,22 @@ final authApiProvider = Provider<AuthApi>((ref) {
 final authControllerProvider = NotifierProvider<AuthController, AuthState>(
   AuthController.new,
 );
+
+final fcmServiceProvider = Provider<FcmService>((ref) {
+  return FcmService(
+    onTokenReceived: (token) async {
+      await ref
+          .read(dioProvider)
+          .post<Map<String, dynamic>>(
+            '/api/v1/users/fcm-token',
+            data: {'fcm_token': token},
+          );
+    },
+    onAttendanceMessage: () async {
+      ref.invalidate(attendanceHistoryProvider);
+    },
+  );
+});
 
 class AuthController extends Notifier<AuthState> {
   bool _initialized = false;
@@ -82,6 +99,7 @@ class AuthController extends Notifier<AuthState> {
     }
 
     state = AuthState.authenticated(restoredUser);
+    _initializeFcm();
   }
 
   Future<bool> signIn({required String email, required String password}) async {
@@ -92,6 +110,7 @@ class AuthController extends Notifier<AuthState> {
       await _persistTokens(result.tokens);
       await ref.read(tokenStorageProvider).saveUser(result.user);
       state = AuthState.authenticated(result.user);
+      _initializeFcm();
       return true;
     } catch (error) {
       state = AuthState.unauthenticated(_buildSignInErrorMessage(error));
@@ -116,6 +135,7 @@ class AuthController extends Notifier<AuthState> {
     await _persistTokens(result.loginResult.tokens);
     await ref.read(tokenStorageProvider).saveUser(result.loginResult.user);
     state = AuthState.authenticated(result.loginResult.user);
+    _initializeFcm();
     return result;
   }
 
@@ -197,6 +217,12 @@ class AuthController extends Notifier<AuthState> {
   Future<void> _persistTokens(TokenPair tokens) async {
     await ref.read(tokenStorageProvider).save(tokens);
     await ref.read(tokenSessionProvider).set(tokens);
+  }
+
+  void _initializeFcm() {
+    Future<void>.microtask(() async {
+      await ref.read(fcmServiceProvider).initialize();
+    });
   }
 
   Future<void> _clearTokens() async {

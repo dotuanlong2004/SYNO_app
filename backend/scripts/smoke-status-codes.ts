@@ -109,6 +109,16 @@ async function main() {
       expectedStatus: 401,
     },
     {
+      name: 'admin web students require bearer token',
+      path: '/api/v1/admin-web/students',
+      expectedStatus: 401,
+    },
+    {
+      name: 'platform admin schools require bearer token',
+      path: '/api/v1/platform-admin/schools',
+      expectedStatus: 401,
+    },
+    {
       name: 'hardware scan rejects missing attendance code as 400',
       method: 'POST',
       path: '/api/v1/hardware/scan',
