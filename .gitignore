@@ -2,7 +2,8 @@ node_modules/
 .pnpm-store/
 .pub-cache/
 tools/legacy-local/
-reports/
+/reports/
+docs/reports/generated/
 build/
 dist/
 .dart_tool/

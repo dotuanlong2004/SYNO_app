@@ -97,10 +97,10 @@ Polling: 3s
    - `hardware-collector/ronald-jack-aix1/run-collector.ps1` reads `HARDWARE_API_KEY` from `backend/.env`, sets `COLLECTOR_REQUIRE_HARDWARE_API_KEY=true`, and refuses to run if the key is missing.
    - Latest `dotnet build hardware-collector/ronald-jack-aix1 -c Release` passed with 0 warnings and 0 errors.
 
-4. Some repo build outputs are dirty.
-   - `hardware-collector/ronald-jack-aix1/bin`
-   - `hardware-collector/ronald-jack-aix1/obj`
-   - Review `.gitignore` and avoid committing generated files.
+4. Repo snapshot was stabilized and pushed on 2026-05-25.
+   - Latest pushed commit: `bec51701 chore: stabilize SYNO admin platform progress`.
+   - Local `main` is synced with `origin/main` after user pushed the commit.
+   - Generated build outputs remain ignored; avoid committing `bin`, `obj`, `.dart_tool`, `build`, or `dist`.
 
 5. Multi-school isolation is the core SaaS requirement.
    - Every business query must remain scoped by `school_id`.
