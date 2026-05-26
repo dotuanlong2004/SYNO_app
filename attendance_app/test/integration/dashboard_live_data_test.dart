@@ -38,6 +38,8 @@ class _InMemoryTokenStorage extends TokenStorage {
 }
 
 void main() {
+  const runLiveBackendTests = bool.fromEnvironment('RUN_LIVE_BACKEND_TESTS');
+
   test('fetches real attendance logs through Riverpod data layer', () async {
     final container = ProviderContainer(
       overrides: [
@@ -63,5 +65,5 @@ void main() {
       expect(record.studentId, isNotEmpty);
       expect(record.timestamp, isA<DateTime>());
     }
-  });
+  }, skip: runLiveBackendTests ? false : 'Set RUN_LIVE_BACKEND_TESTS=true and start backend on port 3000 to run this live integration test.');
 }
