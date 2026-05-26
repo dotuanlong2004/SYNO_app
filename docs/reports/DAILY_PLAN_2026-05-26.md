@@ -47,7 +47,7 @@ Status: completed and pushed in `22c07bbe`.
 
 ### Slice 5 - Hardware Deployment Check
 
-Status: waiting for real runtime/device window.
+Status: deferred until post-feature integration test pass.
 
 - Run backend on port `3000`.
 - Run `hardware-collector/ronald-jack-aix1/run-collector.ps1`.
@@ -55,7 +55,7 @@ Status: waiting for real runtime/device window.
 
 ### Slice 6 - Real Push Test
 
-Status: helper in progress; waiting for real device token.
+Status: deferred until post-feature integration test pass; helper is available.
 
 - Capture an app FCM token from a real parent device/session.
 - Trigger attendance notification path.

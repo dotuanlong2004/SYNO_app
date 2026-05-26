@@ -533,3 +533,20 @@ Kết quả mọi task phải nêu rõ:
   4. push len remote ngay.
 - Khong gom nhieu module lon vao mot commit neu co the tach an toan.
 - Neu push that bai vi network/auth/sandbox, bao ro va tiep tuc giu working tree co the commit/push lai.
+
+---
+
+## 22) Feature-first execution directive (May 26, 2026)
+
+- User directive: tam gac test phan cung AI-X1 va test thong bao push that de uu tien hoan thien toan bo chuc nang truoc.
+- Hardware real-device test va FCM real-device/background test la hau kiem sau khi cac chuc nang/web/app/backend/service da lien ket xong.
+- Trong giai do hien tai:
+  1. khong dung viec vi thieu device/token that neu co the tiep tuc lam chuc nang bang contract/unit/build tests;
+  2. uu tien hoan thien va noi cac service backend, admin_web, parent app, super_admin_web theo roadmap;
+  3. van giu contract tests, typecheck, build, smoke tests khi phu hop;
+  4. khong hardcode secret, khong mo RLS/grants rong de "test cho nhanh".
+- Khi chuc nang da dong bo, lap mot pass test tong hop rieng cho:
+  - AI-X1 collector voi thiet bi that;
+  - FCM push tren device phu huynh that;
+  - attendance -> notification -> parent app refresh;
+  - admin_web/super_admin_web end-to-end.
