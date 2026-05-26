@@ -206,6 +206,7 @@ function AppShell({ authToken, authUser, onLogout }) {
     title: '',
     content: '',
     is_general: true,
+    send_notification: false,
   });
   const [grades, setGrades] = useState([]);
   const [gradeForm, setGradeForm] = useState({
@@ -1037,7 +1038,7 @@ function AppShell({ authToken, authUser, onLogout }) {
         headers: adminHeaders,
         body: JSON.stringify(announcementForm),
       });
-      setAnnouncementForm({ title: '', content: '', is_general: true });
+      setAnnouncementForm({ title: '', content: '', is_general: true, send_notification: false });
       await loadAnnouncements();
     } catch (error) {
       setMessage(error.message);
@@ -1858,6 +1859,16 @@ function AppShell({ authToken, authUser, onLogout }) {
                   setAnnouncementForm((prev) => ({ ...prev, content: e.target.value }))
                 }
               />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={announcementForm.send_notification}
+                  onChange={(e) =>
+                    setAnnouncementForm((prev) => ({ ...prev, send_notification: e.target.checked }))
+                  }
+                />
+                Gui push toi phu huynh
+              </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"

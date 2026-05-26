@@ -7,7 +7,14 @@
 
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
+const { sendPushNotification } = require('../config/firebaseAdmin');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const {
+  buildAnnouncementPayload,
+  buildAnnouncementPushPayload,
+  shouldSendAnnouncementPush,
+  summarizePushResults,
+} = require('../services/adminWebAnnouncements');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 
 const router = express.Router();
@@ -468,27 +475,72 @@ router.post('/provision-parent', async (req, res) => {
 // POST /admin-web/announcements
 router.post('/announcements', async (req, res) => {
   const supabase = getSupabase();
-  const { title, content, is_general } = req.body;
+  let payload;
 
-  if (!title || !content) {
+  try {
+    payload = buildAnnouncementPayload({
+      input: req.body,
+      schoolId: req.schoolId,
+    });
+  } catch (error) {
     return res.status(400).json({ ok: false, error: 'Tiêu đề và nội dung không được để trống' });
   }
 
   const { data, error } = await supabase
     .from('announcements')
-    .insert({
-      title,
-      content,
-      is_general: is_general !== undefined ? Boolean(is_general) : true,
-      school_id: req.schoolId,
-    })
+    .insert(payload)
     .select()
     .single();
 
   if (error) {
     return res.status(500).json({ ok: false, error: error.message });
   }
-  return res.status(201).json({ ok: true, data });
+
+  if (!shouldSendAnnouncementPush(req.body)) {
+    return res.status(201).json({ ok: true, data });
+  }
+
+  const { data: parentProfiles, error: tokenError } = await supabase
+    .from('user_profiles')
+    .select('id, email, fcm_token')
+    .eq('school_id', req.schoolId)
+    .eq('role', 'parent')
+    .not('fcm_token', 'is', null);
+
+  if (tokenError) {
+    console.warn('[admin-announcements] Failed to load parent FCM tokens:', tokenError.message);
+    return res.status(201).json({
+      ok: true,
+      data,
+      notification: {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        error: tokenError.message,
+      },
+    });
+  }
+
+  const pushResults = await Promise.all(
+    (parentProfiles || []).map(async (profile) => {
+      try {
+        await sendPushNotification(buildAnnouncementPushPayload({
+          token: profile.fcm_token,
+          announcement: data,
+        }));
+        return { ok: true };
+      } catch (pushError) {
+        console.warn('[admin-announcements] FCM send failed:', pushError.message);
+        return { ok: false };
+      }
+    }),
+  );
+
+  return res.status(201).json({
+    ok: true,
+    data,
+    notification: summarizePushResults(pushResults),
+  });
 });
 
 // DELETE /admin-web/announcements/:id

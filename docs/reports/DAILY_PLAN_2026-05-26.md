@@ -62,3 +62,13 @@ Status: helper in progress; waiting for real device token.
 - Verify foreground/background/terminated behavior.
 - Helper command once a user has `fcm_token`:
   `corepack pnpm --filter backend run fcm:test-push -- --email=<parent-email>`
+
+### Slice 7 - Admin Announcement Push
+
+Status: completed; committed and pushed in the current slice.
+
+- Add explicit opt-in push checkbox for Admin Web announcements.
+- Keep announcement creation independent from FCM delivery failures.
+- Send only to parent profiles in the current `school_id` that have an `fcm_token`.
+- Add backend contract coverage for announcement payload and FCM payload building.
+- Verification: `corepack pnpm --filter backend test`, `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `git diff --check`.
