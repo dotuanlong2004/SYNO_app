@@ -11,7 +11,7 @@
 
 ### Slice 1 - FCM Readiness Hardening
 
-Status: in progress.
+Status: completed and pushed in `c8f48eae`.
 
 - Centralize FCM token validation and persistence in backend.
 - Make `/api/v1/users/fcm-token` surface Supabase update failures.
@@ -21,7 +21,7 @@ Status: in progress.
 
 ### Slice 2 - Documentation Alignment
 
-Status: in progress.
+Status: completed and pushed in `c8f48eae`.
 
 - Keep AI-X1 collector docs aligned with the current backend-only ingestion path.
 - Remove guidance that asks developers to edit `Program.cs` or configure Supabase anon keys in collector runtime.
@@ -29,19 +29,21 @@ Status: in progress.
 
 ### Slice 3 - Admin Web Feature Polish
 
-Status: next.
+Status: completed and pushed in `b473a3e4`.
 
 - Audit timetable, grades, fees, announcements flows against current API contracts.
 - Prefer small UX/API consistency fixes that do not require schema changes.
 - Verification: `corepack pnpm --filter admin_web run typecheck` and `corepack pnpm --filter admin_web run build`.
+- Completed slice: fee notices now require a resolved school-scoped student before create/update/import, preventing orphan fee rows.
 
 ### Slice 4 - Parent App Feature Polish
 
-Status: next.
+Status: completed and pushed in `22c07bbe`.
 
 - Audit attendance, timetable, grades, fees, announcements screens for stale text, token handling, and refresh behavior.
 - Avoid device-specific FCM claims unless tested on a real device token.
 - Verification: `flutter analyze` and `flutter test` from `attendance_app`.
+- Completed slice: live backend integration test is now opt-in so default `flutter test` is stable without a running backend; live test remains available with `--dart-define=RUN_LIVE_BACKEND_TESTS=true`.
 
 ### Slice 5 - Hardware Deployment Check
 
