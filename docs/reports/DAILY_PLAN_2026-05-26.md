@@ -81,3 +81,12 @@ Status: completed; committed and pushed in the current slice.
 - Validate scores are numeric and within the 0-10 school grading scale.
 - Stop bulk grade import on unknown `student_code` instead of silently skipping rows.
 - Verification: `corepack pnpm --filter backend test`, `git diff --check`.
+
+### Slice 9 - Timetable Import Validation
+
+Status: completed; committed and pushed in the current slice.
+
+- Centralize Admin Web timetable payload building.
+- Validate `day_of_week` is 1-7 and time values use `HH:mm`.
+- Prevent invalid timetable imports from being silently defaulted to Monday/default times.
+- Verification: `corepack pnpm --filter backend test`, `git diff --check`.

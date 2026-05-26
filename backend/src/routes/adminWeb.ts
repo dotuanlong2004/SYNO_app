@@ -17,6 +17,7 @@ const {
 } = require('../services/adminWebAnnouncements');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { buildGradePayload } = require('../services/adminWebGrades');
+const { buildTimetablePayload } = require('../services/adminWebTimetables');
 
 const router = express.Router();
 
@@ -279,9 +280,16 @@ router.delete('/students/:id', async (req, res) => {
 // POST /admin-web/timetables
 router.post('/timetables', async (req, res) => {
   const supabase = getSupabase();
+  let payload;
+  try {
+    payload = buildTimetablePayload({ row: req.body, schoolId: req.schoolId });
+  } catch (timetableError) {
+    return res.status(400).json({ ok: false, error: timetableError.message });
+  }
+
   const { data, error } = await supabase
     .from('timetables')
-    .insert({ ...req.body, school_id: req.schoolId })
+    .insert(payload)
     .select()
     .single();
 
@@ -294,9 +302,16 @@ router.post('/timetables', async (req, res) => {
 // PUT /admin-web/timetables/:id
 router.put('/timetables/:id', async (req, res) => {
   const supabase = getSupabase();
+  let payload;
+  try {
+    payload = buildTimetablePayload({ row: req.body, schoolId: req.schoolId });
+  } catch (timetableError) {
+    return res.status(400).json({ ok: false, error: timetableError.message });
+  }
+
   const { data, error } = await supabase
     .from('timetables')
-    .update(req.body)
+    .update(payload)
     .eq('id', req.params.id)
     .eq('school_id', req.schoolId)
     .select()
@@ -708,19 +723,14 @@ router.post('/timetables/bulk', async (req, res) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ ok: false, error: 'rows must be a non-empty array' });
   }
-  const sanitised = rows
-    .map((r) => ({
-      school_id: req.schoolId,
-      class_id: String(r.class_id || '').trim(),
-      subject_name: String(r.subject_name || '').trim(),
-      day_of_week: Number(r.day_of_week) || 1,
-      start_time: String(r.start_time || '07:30').trim().slice(0, 5),
-      end_time: String(r.end_time || '08:15').trim().slice(0, 5),
-      room: String(r.room || '').trim() || null,
-      teacher_name: String(r.teacher_name || '').trim() || null,
-      period: String(r.period || '').trim() || null,
-    }))
-    .filter((r) => r.class_id && r.subject_name);
+  const sanitised = [];
+  for (const row of rows) {
+    try {
+      sanitised.push(buildTimetablePayload({ row, schoolId: req.schoolId }));
+    } catch (timetableError) {
+      return res.status(400).json({ ok: false, error: timetableError.message });
+    }
+  }
 
   if (sanitised.length === 0) {
     return res.status(400).json({ ok: false, error: 'Không có dòng hợp lệ (cần class_id và subject_name)' });
