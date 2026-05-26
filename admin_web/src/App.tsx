@@ -215,6 +215,11 @@ function AppShell({ authToken, authUser, onLogout }) {
     midterm_score: '0',
     final_score: '0',
   });
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatForm, setChatForm] = useState({
+    student_code: '',
+    message_text: '',
+  });
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [attendanceFilters, setAttendanceFilters] = useState({
     student_code: '',
@@ -227,6 +232,7 @@ function AppShell({ authToken, authUser, onLogout }) {
   const [feeSearch, setFeeSearch] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
   const [gradeSearch, setGradeSearch] = useState('');
+  const [chatSearch, setChatSearch] = useState('');
 
   // Excel import state (students)
   const [importLoading, setImportLoading] = useState(false);
@@ -271,14 +277,16 @@ function AppShell({ authToken, authUser, onLogout }) {
       requestJson(`${ADMIN_WEB_API}/fees`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/announcements`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/chat/messages`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
     ])
-      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson, attendanceJson]) => {
+      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson, chatJson, attendanceJson]) => {
         setStudents(studentsJson.data || []);
         setTimetables(timetablesJson.data || []);
         setFees(feesJson.data || []);
         setAnnouncements(announcementsJson.data || []);
         setGrades(gradesJson.data || []);
+        setChatMessages(chatJson.data || []);
         setAttendanceLogs(attendanceJson.data || []);
       })
       .catch((error) => {
@@ -386,6 +394,20 @@ function AppShell({ authToken, authUser, onLogout }) {
     }
   }
 
+  async function loadChatMessages(studentCode = chatForm.student_code) {
+    try {
+      const params = new URLSearchParams();
+      if (studentCode) params.set('student_code', studentCode);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const json = await requestJson(`${ADMIN_WEB_API}/chat/messages${suffix}`, {
+        headers: adminHeaders,
+      });
+      setChatMessages(json.data || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   async function loadAttendanceLogs() {
     try {
       const params = new URLSearchParams();
@@ -448,6 +470,12 @@ function AppShell({ authToken, authUser, onLogout }) {
       matchesTextSearch(item, gradeSearch, ['student_code', 'subject_name', 'semester', 'school_year'])
     );
   }, [grades, gradeSearch]);
+
+  const filteredChatMessages = useMemo(() => {
+    return chatMessages.filter((item) =>
+      matchesTextSearch(item, chatSearch, ['student_code', 'sender_role', 'sender_name', 'message_text'])
+    );
+  }, [chatMessages, chatSearch]);
 
   const adminStats = useMemo(() => {
     const paidFees = fees.filter((item) => String(item.payment_status || '').toLowerCase() === 'paid').length;
@@ -1097,6 +1125,22 @@ function AppShell({ authToken, authUser, onLogout }) {
     }
   }
 
+  async function sendChatMessage(event) {
+    event.preventDefault();
+    setMessage('');
+    try {
+      await requestJson(`${ADMIN_WEB_API}/chat/messages`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(chatForm),
+      });
+      setChatForm((prev) => ({ ...prev, message_text: '' }));
+      await loadChatMessages(chatForm.student_code);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
@@ -1151,6 +1195,7 @@ function AppShell({ authToken, authUser, onLogout }) {
             ['fees', 'Học phí & Thu phí'],
             ['announcements', 'Thông báo'],
             ['grades', 'Bảng điểm'],
+            ['chat', 'Tin nhan'],
             ['attendance', 'Điểm danh'],
             ['device', 'Giả lập Quẹt thẻ'],
           ].map(([value, label]) => (
@@ -2025,6 +2070,82 @@ function AppShell({ authToken, authUser, onLogout }) {
                 </div>
               )}
             </div>
+          </section>
+        ) : null}
+
+        {tab === 'chat' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <h2 className="mb-3 text-lg font-semibold">Tin nhan phu huynh</h2>
+            <div className="mb-4 grid gap-2 md:grid-cols-[220px_1fr_auto]">
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={chatForm.student_code}
+                onChange={(e) => {
+                  const studentCode = e.target.value;
+                  setChatForm((prev) => ({ ...prev, student_code: studentCode }));
+                  loadChatMessages(studentCode);
+                }}
+              >
+                <option value="">Tat ca hoc sinh</option>
+                {students.map((student) => (
+                  <option key={student.id} value={student.student_code}>
+                    {student.student_code} - {student.full_name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Tim tin nhan..."
+                value={chatSearch}
+                onChange={(e) => setChatSearch(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => loadChatMessages(chatForm.student_code)}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Tai lai
+              </button>
+            </div>
+            <form onSubmit={sendChatMessage} className="mb-4 grid gap-2 md:grid-cols-[220px_1fr_auto]">
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={chatForm.student_code}
+                onChange={(e) => setChatForm((prev) => ({ ...prev, student_code: e.target.value }))}
+                required
+              >
+                <option value="">Chon hoc sinh</option>
+                {students.map((student) => (
+                  <option key={student.id} value={student.student_code}>
+                    {student.student_code} - {student.full_name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Nhap noi dung tra loi"
+                value={chatForm.message_text}
+                onChange={(e) => setChatForm((prev) => ({ ...prev, message_text: e.target.value }))}
+                required
+              />
+              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+                Gui
+              </button>
+            </form>
+            <div className="space-y-2">
+              {filteredChatMessages.map((item) => (
+                <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>{item.student_code}</strong>
+                    <span className="text-xs text-slate-500">
+                      {item.sender_role} - {item.sender_name || 'Unknown'} - {item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : ''}
+                    </span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-slate-700">{item.message_text}</p>
+                </div>
+              ))}
+            </div>
+            {filteredChatMessages.length === 0 ? <EmptyState message="Chua co tin nhan phu hop voi bo loc." /> : null}
           </section>
         ) : null}
 

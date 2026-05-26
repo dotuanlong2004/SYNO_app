@@ -125,3 +125,12 @@ Status: completed; committed and pushed in the current slice.
 - Validate staff chat messages and student codes before insert.
 - Add backend contract coverage for staff chat payloads.
 - Verification: `corepack pnpm --filter backend test`, `git diff --check`.
+
+### Slice 14 - Admin Web Chat UI
+
+Status: completed; committed and pushed in the current slice.
+
+- Add Admin Web chat tab.
+- Let staff filter chat by student, review message history, and send replies.
+- Connect UI to `/api/v1/admin-web/chat/messages`.
+- Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `git diff --check`.
