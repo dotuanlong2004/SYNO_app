@@ -90,3 +90,12 @@ Status: completed; committed and pushed in the current slice.
 - Validate `day_of_week` is 1-7 and time values use `HH:mm`.
 - Prevent invalid timetable imports from being silently defaulted to Monday/default times.
 - Verification: `corepack pnpm --filter backend test`, `git diff --check`.
+
+### Slice 10 - Student Import Validation
+
+Status: completed; committed and pushed in the current slice.
+
+- Centralize Admin Web student payload validation.
+- Reject duplicate `student_code` values within the same Excel import file.
+- Reuse the same required-field validation for single student create and bulk import.
+- Verification: `corepack pnpm --filter backend test`, `git diff --check`.

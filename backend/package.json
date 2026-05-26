@@ -10,7 +10,7 @@
     "db:migrate": "tsx scripts/auto-migrate.ts",
     "db:setup": "tsx scripts/auto-migrate.ts",
     "db:auto": "tsx scripts/auto-migrate.ts",
-    "test": "tsc -p tsconfig.json --noEmit && tsx scripts/admin-web-account-contract.test.ts && tsx scripts/admin-web-announcement-contract.test.ts && tsx scripts/admin-web-fee-contract.test.ts && tsx scripts/admin-web-grade-contract.test.ts && tsx scripts/admin-web-timetable-contract.test.ts && tsx scripts/fcm-test-push-contract.test.ts && tsx scripts/user-fcm-token-contract.test.ts && tsx scripts/smoke-status-codes.ts",
+    "test": "tsc -p tsconfig.json --noEmit && tsx scripts/admin-web-account-contract.test.ts && tsx scripts/admin-web-announcement-contract.test.ts && tsx scripts/admin-web-fee-contract.test.ts && tsx scripts/admin-web-grade-contract.test.ts && tsx scripts/admin-web-student-contract.test.ts && tsx scripts/admin-web-timetable-contract.test.ts && tsx scripts/fcm-test-push-contract.test.ts && tsx scripts/user-fcm-token-contract.test.ts && tsx scripts/smoke-status-codes.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:status": "tsx scripts/smoke-status-codes.ts",
     "check:production": "tsx scripts/check-production-readiness.ts --strict",

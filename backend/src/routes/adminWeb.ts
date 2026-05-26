@@ -17,6 +17,7 @@ const {
 } = require('../services/adminWebAnnouncements');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { buildGradePayload } = require('../services/adminWebGrades');
+const { buildStudentBulkPayload, buildStudentPayload } = require('../services/adminWebStudents');
 const { buildTimetablePayload } = require('../services/adminWebTimetables');
 
 const router = express.Router();
@@ -176,23 +177,13 @@ router.post('/students/bulk', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'rows must be a non-empty array' });
   }
 
-  // Validate and sanitise each row
-  const sanitised = [];
-  const invalid = [];
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const student_code = String(r.student_code || '').trim();
-    const full_name = String(r.full_name || '').trim();
-    const class_name = String(r.class_name || '').trim();
-
-    if (!student_code || !full_name) {
-      invalid.push({ row: i + 1, reason: 'student_code và full_name không được để trống', data: r });
-      continue;
-    }
-
-    sanitised.push({ student_code, full_name, class_name: class_name || null, school_id: req.schoolId });
+  let payload;
+  try {
+    payload = buildStudentBulkPayload({ rows, schoolId: req.schoolId });
+  } catch (studentError) {
+    return res.status(400).json({ ok: false, error: studentError.message });
   }
-
+  const { sanitised, invalid } = payload;
   if (sanitised.length === 0) {
     return res.status(400).json({ ok: false, error: 'Không có dòng hợp lệ để import', invalid });
   }
@@ -223,16 +214,16 @@ router.post('/students/bulk', async (req, res) => {
 // POST /admin-web/students
 router.post('/students', async (req, res) => {
   const supabase = getSupabase();
-  const { student_code, full_name, class_name } = req.body;
+  let payload;
+  try {
+    payload = buildStudentPayload({ row: req.body, schoolId: req.schoolId });
+  } catch (studentError) {
+    return res.status(400).json({ ok: false, error: studentError.message });
+  }
 
   const { data, error } = await supabase
     .from('students')
-    .insert({
-      student_code,
-      full_name,
-      class_name,
-      school_id: req.schoolId,
-    })
+    .insert(payload)
     .select()
     .single();
 
