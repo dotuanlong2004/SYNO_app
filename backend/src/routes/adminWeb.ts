@@ -16,6 +16,7 @@ const {
   summarizePushResults,
 } = require('../services/adminWebAnnouncements');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
+const { buildGradePayload } = require('../services/adminWebGrades');
 
 const router = express.Router();
 
@@ -662,23 +663,20 @@ router.post('/grades', async (req, res) => {
     return res.status(404).json({ ok: false, error: `Kh\u00f4ng t\u00ecm th\u1ea5y h\u1ecdc sinh v\u1edbi m\u00e3 ${studentCode}` });
   }
 
-  const midterm = Number(req.body.midterm_score ?? 0);
-  const final = Number(req.body.final_score ?? 0);
-  const average = Math.round(((midterm * 1 + final * 2) / 3) * 10) / 10;
+  let payload;
+  try {
+    payload = buildGradePayload({
+      row: req.body,
+      schoolId: req.schoolId,
+      studentId: student.id,
+    });
+  } catch (gradeError) {
+    return res.status(400).json({ ok: false, error: gradeError.message });
+  }
 
   const { data, error } = await supabase
     .from('grades')
-    .insert({
-      school_id: req.schoolId,
-      student_id: student.id,
-      student_code: studentCode,
-      subject_name: subjectName,
-      midterm_score: midterm,
-      final_score: final,
-      average_score: average,
-      semester: req.body.semester || '1',
-      academic_year: req.body.academic_year || '2024-2025',
-    })
+    .insert(payload)
     .select()
     .single();
 
@@ -781,20 +779,18 @@ router.post('/grades/bulk', async (req, res) => {
       const { data: s } = await supabase.from('students').select('id').eq('student_code', code).eq('school_id', req.schoolId).maybeSingle();
       cache[code] = s?.id || null;
     }
-    if (!cache[code]) continue;
-    const midterm = Number(r.midterm_score ?? 0);
-    const final = Number(r.final_score ?? 0);
-    toInsert.push({
-      school_id: req.schoolId,
-      student_id: cache[code],
-      student_code: code,
-      subject_name: String(r.subject_name).trim(),
-      midterm_score: midterm,
-      final_score: final,
-      average_score: Math.round(((midterm + final * 2) / 3) * 10) / 10,
-      semester: String(r.semester || '1'),
-      academic_year: String(r.academic_year || '2024-2025'),
-    });
+    if (!cache[code]) {
+      return res.status(404).json({ ok: false, error: `student_code ${code} was not found in school ${req.schoolId}` });
+    }
+    try {
+      toInsert.push(buildGradePayload({
+        row: r,
+        schoolId: req.schoolId,
+        studentId: cache[code],
+      }));
+    } catch (gradeError) {
+      return res.status(400).json({ ok: false, error: gradeError.message });
+    }
   }
   if (toInsert.length === 0) {
     return res.status(400).json({ ok: false, error: 'Không tìm thấy học sinh hợp lệ trong hệ thống' });

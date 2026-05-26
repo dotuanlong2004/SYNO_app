@@ -72,3 +72,12 @@ Status: completed; committed and pushed in the current slice.
 - Send only to parent profiles in the current `school_id` that have an `fcm_token`.
 - Add backend contract coverage for announcement payload and FCM payload building.
 - Verification: `corepack pnpm --filter backend test`, `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `git diff --check`.
+
+### Slice 8 - Grade Import Validation
+
+Status: completed; committed and pushed in the current slice.
+
+- Centralize Admin Web grade payload building.
+- Validate scores are numeric and within the 0-10 school grading scale.
+- Stop bulk grade import on unknown `student_code` instead of silently skipping rows.
+- Verification: `corepack pnpm --filter backend test`, `git diff --check`.
