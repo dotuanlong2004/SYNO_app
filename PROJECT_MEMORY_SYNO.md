@@ -520,3 +520,16 @@ Kết quả mọi task phải nêu rõ:
 - Backend platform-admin APIs stay under `/api/v1/platform-admin/*` and must require `role = super_admin`.
 - Platform UI/API responsibilities include school CRUD, school admin/teacher account management, Super Admin account management, password reset, active/inactive status, and platform audit logs.
 - User requested test account passwords to be `123456`. Current Super Admin target account is `superadmin@syno.local`; the Super Admin test login is `superadmin@syno.local` / `123456` with `school_id = null`.
+
+---
+
+## 21) Git progress rule (May 26, 2026)
+
+- User directive: lam toi dau day code len git toi do.
+- Sau moi lat cat tien do co y nghia:
+  1. chay verification phu hop voi module;
+  2. kiem tra secret/build output khong bi stage;
+  3. commit nho theo conventional commit;
+  4. push len remote ngay.
+- Khong gom nhieu module lon vao mot commit neu co the tach an toan.
+- Neu push that bai vi network/auth/sandbox, bao ro va tiep tuc giu working tree co the commit/push lai.

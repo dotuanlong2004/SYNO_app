@@ -1,7 +1,7 @@
 # Hardware Collector SDK
 
 📦 **Phiên bản:** v1.0.0  
-🎯 **Mục đích:** Kết nối máy chấm công Ronald Jack AI-X1 và đẩy dữ liệu real-time về Supabase
+🎯 **Mục đích:** Kết nối máy chấm công Ronald Jack AI-X1 và đẩy dữ liệu real-time về backend SYNO
 
 ---
 
@@ -44,30 +44,28 @@ Register_SDK_x86.bat
 ```batch
 cd ronald-jack-aix1
 dotnet build -c Release
-dotnet run
+powershell -ExecutionPolicy Bypass -File .\run-collector.ps1
 ```
 
 ---
 
 ## 🔧 Cấu hình
 
-Tạo file `.env` trong thư mục `ronald-jack-aix1`:
+Collector đọc cấu hình từ environment variables. Khi chạy local, `run-collector.ps1` sẽ đọc `HARDWARE_API_KEY` từ `backend\.env`, set các biến dev đã xác minh, rồi chạy file `.exe`.
 
 ```env
-# Device Settings
-DEVICE_IP=192.168.0.225
-DEVICE_PORT=4370
-MACHINE_NUMBER=1
-
-# Backend Settings
-BACKEND_URL=http://localhost:3000
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SCHOOL_ID=your-school-id
-
-# Polling Interval (giây)
-POLL_INTERVAL=3
+AI_X1_DEVICE_IP=192.168.0.225
+AI_X1_DEVICE_PORT=4370
+AI_X1_MACHINE_NUMBER=1
+AI_X1_COMM_PASSWORD=0
+SCHOOL_ID=1
+BACKEND_HARDWARE_SCAN_URL=http://localhost:3000/api/v1/hardware/scan
+AI_X1_POLL_MS=3000
+HARDWARE_API_KEY=<same-secret-as-backend>
+COLLECTOR_REQUIRE_HARDWARE_API_KEY=true
 ```
+
+Không cấu hình `SUPABASE_URL` hoặc `SUPABASE_ANON_KEY` cho collector. Backend chịu trách nhiệm resolve `ma_cham_cong` theo `school_id` và ghi Supabase bằng secret server-side.
 
 ---
 
@@ -75,7 +73,7 @@ POLL_INTERVAL=3
 
 ```
 Ronald Jack AI-X1 → COM SDK → C# Collector → Backend API → Supabase → FCM Notification
-     (Enroll ID)         (Pull)        (REST)      (/api/v1/hardware/scan)   (to Parent)
+  (Enroll ID)         (Pull)        (REST)      (/api/v1/hardware/scan)   (to Parent)
 ```
 
 ---
@@ -114,7 +112,7 @@ Ronald Jack AI-X1 → COM SDK → C# Collector → Backend API → Supabase → 
 
 - **KHÔNG** commit file `.env` chứa API keys
 - **KHÔNG** chia sẻ `SUPABASE_SERVICE_ROLE_KEY`
-- Anon key là publishable, có thể include trong code
+- **KHÔNG** đưa Supabase anon/service key vào collector. Collector chỉ dùng backend URL và `HARDWARE_API_KEY`.
 
 ---
 

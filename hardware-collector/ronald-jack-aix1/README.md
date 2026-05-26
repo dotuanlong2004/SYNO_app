@@ -1,15 +1,15 @@
 # Ronald Jack AI-X1 Real-time Collector
 
-Thu thập dữ liệu chấm công real-time từ máy Ronald Jack AI-X1 và đẩy về backend.
+Thu thập dữ liệu chấm công real-time từ máy Ronald Jack AI-X1 và đẩy về backend SYNO.
 
 ---
 
 ## 🚀 Chạy ngay (Already Built)
 
-Nếu đã có file `.exe` trong `bin\Release\`:
+Nếu đã có file `.exe` trong `bin\Release\`, chạy helper để tự nạp `HARDWARE_API_KEY` từ `backend\.env`:
 
 ```batch
-TestCOMReflect.exe
+powershell -ExecutionPolicy Bypass -File .\run-collector.ps1
 ```
 
 ---
@@ -27,48 +27,41 @@ TestCOMReflect.exe
 
 ### Build bằng command line
 ```batch
-dotnet build -c Release -r win-x86
+dotnet build -c Release
 ```
 
 ---
 
 ## ⚙️ Cấu hình trước khi chạy
 
-### 1. Device IP
-Mở `Program.cs`, tìm dòng:
-```csharp
-string ip = "192.168.0.225";
-int port = 4370;
-```
-Sửa IP cho đúng với mạng của bạn.
+Không sửa `Program.cs` để đổi môi trường. Collector đọc các biến sau:
 
-### 2. Backend URL
-Tìm dòng:
-```csharp
-string backendUrl = "http://localhost:3000/api/v1/hardware/scan";
+```env
+AI_X1_DEVICE_IP=192.168.0.225
+AI_X1_DEVICE_PORT=4370
+AI_X1_MACHINE_NUMBER=1
+AI_X1_COMM_PASSWORD=0
+SCHOOL_ID=1
+BACKEND_HARDWARE_SCAN_URL=http://localhost:3000/api/v1/hardware/scan
+AI_X1_POLL_MS=3000
+HARDWARE_API_KEY=<same-secret-as-backend>
+COLLECTOR_REQUIRE_HARDWARE_API_KEY=true
 ```
-Sửa thành URL backend thực tế.
 
-### 3. Supabase Config
-Tìm và sửa:
-```csharp
-string supabaseUrl = "https://your-project.supabase.co";
-string supabaseKey = "your-anon-key";
-string schoolId = "your-school-id";
-```
+Local helper `run-collector.ps1` set các giá trị dev đã xác minh và từ chối chạy nếu `backend\.env` chưa có `HARDWARE_API_KEY`.
 
 ---
 
 ## 📊 Luồng hoạt động
 
 ```
-1. Load student map từ Supabase (ma_cham_cong → student_code)
-2. Connect to device qua COM SDK
-3. Vòng lặp mỗi 3 giây:
+1. Connect to device qua COM SDK
+2. Vòng lặp mỗi 3 giây:
    - ReadAllGLogData() → đọc toàn bộ logs
    - GetAllGLogData() → lấy từng record
    - Filter by timestamp > lastScanTime
-   - POST /api/v1/hardware/scan cho mỗi scan mới
+   - POST `ma_cham_cong`, `school_id`, `timestamp` lên `/api/v1/hardware/scan`
+3. Backend resolve học sinh theo `school_id + ma_cham_cong`, chống trùng, ghi Supabase và gửi FCM
 4. Sleep 3s, lặp lại
 ```
 
@@ -94,7 +87,8 @@ string schoolId = "your-school-id";
 cd scripts
 Register_SDK_x86.bat
 cd ..\ronald-jack-aix1
-dotnet run
+dotnet build -c Release
+powershell -ExecutionPolicy Bypass -File .\run-collector.ps1
 ```
 
 Expected output:
@@ -103,7 +97,6 @@ Expected output:
 ✅ Kết nối thành công!
 👤 Số nhân viên: 50
 📊 Tổng log: 1,234
-✅ Student map loaded: 1 students
 🔄 Polling mỗi 3 giây...
 ```
 
@@ -139,7 +132,7 @@ Tạo file `start-collector.bat`:
 @echo off
 cd /d "%~dp0"
 :loop
-dotnet run
+powershell -ExecutionPolicy Bypass -File .\run-collector.ps1
 if errorlevel 1 (
     echo Lỗi, restart sau 5 giây...
     timeout /t 5 /nobreak >nul
@@ -154,19 +147,19 @@ if errorlevel 1 (
 ### Payload gửi backend
 ```json
 {
-  "student_id": "HS0085",
-  "school_id": "uuid-here",
+  "ma_cham_cong": "1",
+  "school_id": "1",
   "timestamp": "2026-05-11T08:30:00.000Z"
 }
 ```
 
 ### Mapping trong Supabase
 ```sql
-students.ma_cham_cong (device enroll_id)
+students.school_id + students.ma_cham_cong
     ↓
-students.student_code (e.g., HS0085)
+students.id / student_code
     ↓
-user_profiles.student_code (link to parent)
+attendance_logs + parent FCM lookup
 ```
 
 ---
@@ -177,6 +170,7 @@ user_profiles.student_code (link to parent)
 2. **OCX Registration:** Chạy `Register_SDK_x86.bat` với quyền Admin
 3. **Firewall:** Mở port 4370 nếu có firewall
 4. **Timestamp:** Luôn so sánh UTC để tránh lỗi timezone
+5. **Security:** Không đưa Supabase key vào collector; chỉ dùng `HARDWARE_API_KEY` để gọi backend
 
 ---
 

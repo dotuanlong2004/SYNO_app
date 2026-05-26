@@ -8,6 +8,7 @@ const express = require('express');
 const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
 const { initializeFirebaseAdmin } = require('../config/firebaseAdmin');
+const { saveUserFcmToken, validateFcmToken } = require('../services/userNotificationTokens');
 
 const router = express.Router();
 
@@ -346,29 +347,24 @@ router.post('/chat/messages', mobileAuth, async (req, res) => {
  * POST /api/mobile/fcm-token
  */
 router.post('/fcm-token', mobileAuth, async (req, res) => {
+  let token;
   try {
-    const { fcm_token } = req.body;
+    token = validateFcmToken(req.body?.fcm_token ?? req.body?.fcmToken);
 
-    if (!fcm_token || typeof fcm_token !== 'string') {
-      return res.status(400).json({
-        ok: false,
-        error: 'fcm_token là bắt buộc và phải là string',
-      });
-    }
-
-    const supabase = getSupabase();
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ fcm_token })
-      .eq('id', req.user.id);
-
-    if (updateError) throw updateError;
+    await saveUserFcmToken({ supabase: getSupabase(), userId: req.user.id, token });
 
     return res.json({
       ok: true,
       message: 'FCM token đã được cập nhật',
     });
   } catch (error) {
+    if (String(error?.message || '').startsWith('fcm_token')) {
+      return res.status(400).json({
+        ok: false,
+        error: error.message,
+      });
+    }
+
     console.error('Failed to update FCM token:', error);
     return res.status(500).json({
       ok: false,

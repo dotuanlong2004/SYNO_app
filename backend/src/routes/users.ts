@@ -3,20 +3,21 @@
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const { saveUserFcmToken, validateFcmToken } = require('../services/userNotificationTokens');
 
 const router = express.Router();
 
 // Update FCM token in user_profiles
 router.post('/fcm-token', mobileAuth, async (req, res) => {
-  const token = String(req.body?.fcm_token ?? req.body?.fcmToken ?? '').trim();
-  if (!token) return res.status(400).json({ ok: false, error: 'fcm_token required' });
-  if (token.length > 4096) return res.status(400).json({ ok: false, error: 'fcm_token too long' });
+  let token;
+  try {
+    token = validateFcmToken(req.body?.fcm_token ?? req.body?.fcmToken);
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message });
+  }
 
   try {
-    await getSupabase()
-      .from('user_profiles')
-      .update({ fcm_token: token, updated_at: new Date().toISOString() })
-      .eq('id', req.user.id);
+    await saveUserFcmToken({ supabase: getSupabase(), userId: req.user.id, token });
     return res.status(200).json({ ok: true, message: 'FCM token saved' });
   } catch (error) {
     console.error('Failed to save FCM token', error);
