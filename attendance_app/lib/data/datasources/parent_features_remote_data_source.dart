@@ -1,12 +1,71 @@
 import 'package:dio/dio.dart';
 
 import '../../domain/entities/announcement_item.dart';
+import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/grade_record.dart';
 
 class ParentFeaturesRemoteDataSource {
   ParentFeaturesRemoteDataSource({required Dio dio}) : _dio = dio;
 
   final Dio _dio;
+
+  ChatMessage _parseChatMessage(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      studentCode: '${json['student_code'] ?? ''}',
+      senderRole: '${json['sender_role'] ?? ''}',
+      senderName: '${json['sender_name'] ?? ''}',
+      messageText: '${json['message_text'] ?? ''}',
+      createdAt: json['created_at'] == null
+          ? null
+          : DateTime.tryParse('${json['created_at']}'),
+    );
+  }
+
+  Future<List<ChatMessage>> fetchChatMessages() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/chat/messages',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final rows = response.data?['data'];
+      if (rows is! List) return const <ChatMessage>[];
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(_parseChatMessage)
+          .toList();
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(serverMsg ?? 'Khong the tai tin nhan (${e.type.name})');
+    } catch (e) {
+      throw Exception('Loi khi tai tin nhan: $e');
+    }
+  }
+
+  Future<ChatMessage> sendChatMessage(String messageText) async {
+    final text = messageText.trim();
+    if (text.isEmpty) {
+      throw Exception('Noi dung tin nhan khong duoc de trong');
+    }
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/chat/messages',
+        data: {'message_text': text},
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final row = response.data?['data'];
+      if (row is! Map<String, dynamic>) {
+        throw Exception('Phan hoi gui tin nhan khong hop le');
+      }
+      return _parseChatMessage(row);
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(serverMsg ?? 'Khong the gui tin nhan (${e.type.name})');
+    } catch (e) {
+      throw Exception('Loi khi gui tin nhan: $e');
+    }
+  }
 
   Future<List<AnnouncementItem>> fetchAnnouncements() async {
     try {
@@ -42,7 +101,8 @@ class ParentFeaturesRemoteDataSource {
       );
       final rows = response.data?['data'];
       if (rows is! List) return const <GradeRecord>[];
-      double parseNum(dynamic v) => v is num ? v.toDouble() : (double.tryParse('$v') ?? 0);
+      double parseNum(dynamic v) =>
+          v is num ? v.toDouble() : (double.tryParse('$v') ?? 0);
       return rows.whereType<Map<String, dynamic>>().map((json) {
         return GradeRecord(
           id: (json['id'] as num?)?.toInt() ?? 0,

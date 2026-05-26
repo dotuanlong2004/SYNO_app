@@ -107,3 +107,12 @@ Status: completed; committed and pushed in the current slice.
 - Validate `total_amount` is a finite non-negative number for fee create/update/import.
 - Add contract coverage for invalid fee amounts.
 - Verification: `corepack pnpm --filter backend test`, `git diff --check`.
+
+### Slice 12 - Parent Chat Connection
+
+Status: completed; committed and pushed in the current slice.
+
+- Connect the parent app to backend `/api/v1/chat/messages`.
+- Add parent chat message fetch/send methods and Riverpod provider.
+- Add a parent app chat screen from the drawer with refresh and send states.
+- Verification: `flutter analyze`, `flutter test`, `git diff --check`.

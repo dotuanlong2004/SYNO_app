@@ -23,6 +23,7 @@ import '../../domain/auth/parent_registration_result.dart';
 import '../../domain/auth/token_pair.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/announcement_item.dart';
+import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/fee_notice.dart';
 import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/student_link_info.dart';
@@ -75,9 +76,10 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> _initialize() async {
     final tokenStorage = ref.read(tokenStorageProvider);
-    final stored = await tokenStorage
-        .read()
-        .timeout(const Duration(seconds: 1), onTimeout: () => null);
+    final stored = await tokenStorage.read().timeout(
+      const Duration(seconds: 1),
+      onTimeout: () => null,
+    );
     if (stored == null) {
       state = const AuthState.unauthenticated();
       return;
@@ -86,9 +88,10 @@ class AuthController extends Notifier<AuthState> {
     await ref.read(tokenSessionProvider).set(stored);
 
     // Đọc user profile đã lưu (có role đúng) thay vì decode JWT Supabase
-    final restoredUser = await tokenStorage
-        .readUser()
-        .timeout(const Duration(seconds: 1), onTimeout: () => null);
+    final restoredUser = await tokenStorage.readUser().timeout(
+      const Duration(seconds: 1),
+      onTimeout: () => null,
+    );
 
     if (restoredUser == null || restoredUser.id.isEmpty) {
       // Fallback: chưa có user trong storage (session cũ trước khi update)
@@ -295,21 +298,28 @@ final feeNoticesProvider = FutureProvider<List<FeeNotice>>((ref) async {
   return dataSource.fetchFeeNotices();
 });
 
-final parentFeaturesDataSourceProvider = Provider<ParentFeaturesRemoteDataSource>((ref) {
-  final dio = ref.watch(dioProvider);
-  return ParentFeaturesRemoteDataSource(dio: dio);
-});
+final parentFeaturesDataSourceProvider =
+    Provider<ParentFeaturesRemoteDataSource>((ref) {
+      final dio = ref.watch(dioProvider);
+      return ParentFeaturesRemoteDataSource(dio: dio);
+    });
 
-final announcementsProvider = FutureProvider<List<AnnouncementItem>>((ref) async {
+final announcementsProvider = FutureProvider<List<AnnouncementItem>>((
+  ref,
+) async {
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchAnnouncements();
+});
+
+final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchChatMessages();
 });
 
 final gradesProvider = FutureProvider<List<GradeRecord>>((ref) async {
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchGrades();
 });
-
 
 final studentsDataSourceProvider = Provider<StudentsRemoteDataSource>((ref) {
   final dio = ref.watch(dioProvider);
