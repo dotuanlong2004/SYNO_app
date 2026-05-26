@@ -99,3 +99,11 @@ Status: completed; committed and pushed in the current slice.
 - Reject duplicate `student_code` values within the same Excel import file.
 - Reuse the same required-field validation for single student create and bulk import.
 - Verification: `corepack pnpm --filter backend test`, `git diff --check`.
+
+### Slice 11 - Fee Amount Validation
+
+Status: completed; committed and pushed in the current slice.
+
+- Validate `total_amount` is a finite non-negative number for fee create/update/import.
+- Add contract coverage for invalid fee amounts.
+- Verification: `corepack pnpm --filter backend test`, `git diff --check`.

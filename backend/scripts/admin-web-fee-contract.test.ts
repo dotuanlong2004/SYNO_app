@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { buildFeeNoticePayload, normalizeFeeStatus, normalizePaymentMethod } from '../src/services/adminWebFeeNotices';
+import { buildFeeNoticePayload, normalizeFeeStatus, normalizePaymentMethod, normalizeTotalAmount } from '../src/services/adminWebFeeNotices';
 
 function test(name: string, fn: () => void) {
   try {
@@ -59,4 +59,14 @@ test('fee status and payment method normalization use safe defaults', () => {
   assert.equal(normalizeFeeStatus('bad-status'), 'unpaid');
   assert.equal(normalizePaymentMethod('online'), 'online');
   assert.equal(normalizePaymentMethod('bank-transfer'), null);
+});
+
+test('normalizeTotalAmount accepts finite non-negative amounts', () => {
+  assert.equal(normalizeTotalAmount('0'), 0);
+  assert.equal(normalizeTotalAmount('500000'), 500000);
+});
+
+test('normalizeTotalAmount rejects invalid or negative amounts', () => {
+  assert.throws(() => normalizeTotalAmount('abc'), /total_amount must be a non-negative number/);
+  assert.throws(() => normalizeTotalAmount(-1), /total_amount must be a non-negative number/);
 });

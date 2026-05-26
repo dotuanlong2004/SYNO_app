@@ -37,6 +37,14 @@ export function normalizePaymentMethod(value: unknown): string | null {
   return PAYMENT_METHODS.has(method) ? method : null;
 }
 
+export function normalizeTotalAmount(value: unknown): number {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error('total_amount must be a non-negative number');
+  }
+  return amount;
+}
+
 export function buildFeeNoticePayload({ row, schoolId, studentId }: BuildFeeNoticePayloadInput) {
   const studentCode = String(row?.student_code || '').trim();
   if (!studentCode) {
@@ -53,7 +61,7 @@ export function buildFeeNoticePayload({ row, schoolId, studentId }: BuildFeeNoti
     class_id: String(row?.class_id || '').trim() || null,
     subject_fees: asObject(row?.subject_fees),
     other_fees: asObject(row?.other_fees),
-    total_amount: Number(row?.total_amount || 0),
+    total_amount: normalizeTotalAmount(row?.total_amount),
     payment_status: normalizeFeeStatus(row?.payment_status),
     payment_method: normalizePaymentMethod(row?.payment_method),
     paid_at: row?.paid_at || null,
