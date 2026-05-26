@@ -116,3 +116,12 @@ Status: completed; committed and pushed in the current slice.
 - Add parent chat message fetch/send methods and Riverpod provider.
 - Add a parent app chat screen from the drawer with refresh and send states.
 - Verification: `flutter analyze`, `flutter test`, `git diff --check`.
+
+### Slice 13 - Admin Web Chat Backend
+
+Status: completed; committed and pushed in the current slice.
+
+- Add school-scoped Admin Web chat message read/send endpoints.
+- Validate staff chat messages and student codes before insert.
+- Add backend contract coverage for staff chat payloads.
+- Verification: `corepack pnpm --filter backend test`, `git diff --check`.

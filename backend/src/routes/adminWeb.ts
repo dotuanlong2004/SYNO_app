@@ -15,6 +15,7 @@ const {
   shouldSendAnnouncementPush,
   summarizePushResults,
 } = require('../services/adminWebAnnouncements');
+const { buildStaffChatMessagePayload } = require('../services/adminWebChatMessages');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { buildGradePayload } = require('../services/adminWebGrades');
 const { buildStudentBulkPayload, buildStudentPayload } = require('../services/adminWebStudents');
@@ -166,6 +167,30 @@ router.get('/attendance-logs', async (req, res) => {
       class_name: row.students?.class_name || '',
     })),
   });
+});
+
+// GET /admin-web/chat/messages
+router.get('/chat/messages', async (req, res) => {
+  const supabase = getSupabase();
+  const studentCode = String(req.query.student_code || '').trim();
+
+  let query = supabase
+    .from('chat_messages')
+    .select('id, student_code, sender_role, sender_name, message_text, created_at')
+    .eq('school_id', req.schoolId)
+    .order('created_at', { ascending: true })
+    .limit(300);
+
+  if (studentCode) {
+    query = query.eq('student_code', studentCode);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+
+  return res.json({ ok: true, data });
 });
 
 // POST /admin-web/students/bulk  — Excel import (upsert by student_code)
@@ -548,6 +573,45 @@ router.post('/announcements', async (req, res) => {
     data,
     notification: summarizePushResults(pushResults),
   });
+});
+
+// POST /admin-web/chat/messages
+router.post('/chat/messages', async (req, res) => {
+  const supabase = getSupabase();
+  let payload;
+
+  try {
+    payload = buildStaffChatMessagePayload({
+      row: req.body,
+      schoolId: req.schoolId,
+      sender: req.user || {},
+    });
+  } catch (chatError) {
+    return res.status(400).json({ ok: false, error: chatError.message });
+  }
+
+  const { data: student } = await supabase
+    .from('students')
+    .select('id')
+    .eq('school_id', req.schoolId)
+    .eq('student_code', payload.student_code)
+    .maybeSingle();
+
+  if (!student) {
+    return res.status(404).json({ ok: false, error: `student_code ${payload.student_code} was not found in school ${req.schoolId}` });
+  }
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert(payload)
+    .select('id, student_code, sender_role, sender_name, message_text, created_at')
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+
+  return res.status(201).json({ ok: true, data });
 });
 
 // DELETE /admin-web/announcements/:id
