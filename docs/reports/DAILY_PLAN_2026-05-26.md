@@ -55,8 +55,10 @@ Status: waiting for real runtime/device window.
 
 ### Slice 6 - Real Push Test
 
-Status: waiting for real device token.
+Status: helper in progress; waiting for real device token.
 
 - Capture an app FCM token from a real parent device/session.
 - Trigger attendance notification path.
 - Verify foreground/background/terminated behavior.
+- Helper command once a user has `fcm_token`:
+  `corepack pnpm --filter backend run fcm:test-push -- --email=<parent-email>`
