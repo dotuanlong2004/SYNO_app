@@ -8,6 +8,7 @@
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 
 const router = express.Router();
 
@@ -521,20 +522,13 @@ router.post('/fees', async (req, res) => {
     .eq('school_id', req.schoolId)
     .maybeSingle();
 
+  if (!student) {
+    return res.status(404).json({ ok: false, error: `student_code ${studentCode} was not found in school ${req.schoolId}` });
+  }
+
   const { data, error } = await supabase
     .from('fee_notices')
-    .insert({
-      school_id: req.schoolId,
-      student_id: student?.id || null,
-      student_code: studentCode,
-      class_id: req.body.class_id || null,
-      subject_fees: req.body.subject_fees || {},
-      other_fees: req.body.other_fees || {},
-      total_amount: Number(req.body.total_amount || 0),
-      payment_status: req.body.payment_status || 'unpaid',
-      payment_method: req.body.payment_method || null,
-      paid_at: req.body.paid_at || null,
-    })
+    .insert(buildFeeNoticePayload({ row: req.body, schoolId: req.schoolId, studentId: student.id }))
     .select()
     .single();
 
@@ -547,19 +541,29 @@ router.post('/fees', async (req, res) => {
 // PUT /admin-web/fees/:id
 router.put('/fees/:id', async (req, res) => {
   const supabase = getSupabase();
+  const studentCode = String(req.body.student_code || '').trim();
+  if (!studentCode) {
+    return res.status(400).json({ ok: false, error: 'student_code is required' });
+  }
+  const { data: student } = await supabase
+    .from('students')
+    .select('id')
+    .eq('student_code', studentCode)
+    .eq('school_id', req.schoolId)
+    .maybeSingle();
+
+  if (!student) {
+    return res.status(404).json({ ok: false, error: `student_code ${studentCode} was not found in school ${req.schoolId}` });
+  }
+
+  const payload = {
+    ...buildFeeNoticePayload({ row: req.body, schoolId: req.schoolId, studentId: student.id }),
+    updated_at: new Date().toISOString(),
+  };
+
   const { data, error } = await supabase
     .from('fee_notices')
-    .update({
-      student_code: req.body.student_code,
-      class_id: req.body.class_id || null,
-      subject_fees: req.body.subject_fees || {},
-      other_fees: req.body.other_fees || {},
-      total_amount: Number(req.body.total_amount || 0),
-      payment_status: req.body.payment_status || 'unpaid',
-      payment_method: req.body.payment_method || null,
-      paid_at: req.body.paid_at || null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(payload)
     .eq('id', req.params.id)
     .eq('school_id', req.schoolId)
     .select()
@@ -696,20 +700,10 @@ router.post('/fees/bulk', async (req, res) => {
       const { data: s } = await supabase.from('students').select('id').eq('student_code', code).eq('school_id', req.schoolId).maybeSingle();
       cache[code] = s?.id || null;
     }
-    const status = ['unpaid', 'partial', 'paid'].includes(r.payment_status) ? r.payment_status : 'unpaid';
-    const method = ['online', 'cash'].includes(r.payment_method) ? r.payment_method : null;
-    toInsert.push({
-      school_id: req.schoolId,
-      student_id: cache[code],
-      student_code: code,
-      class_id: String(r.class_id || '').trim() || null,
-      total_amount: Number(r.total_amount || 0),
-      subject_fees: {},
-      other_fees: {},
-      payment_status: status,
-      payment_method: method,
-      paid_at: r.paid_at || null,
-    });
+    if (!cache[code]) {
+      return res.status(404).json({ ok: false, error: `student_code ${code} was not found in school ${req.schoolId}` });
+    }
+    toInsert.push(buildFeeNoticePayload({ row: r, schoolId: req.schoolId, studentId: cache[code] }));
   }
   const { data, error } = await supabase.from('fee_notices').insert(toInsert).select('id');
   if (error) return res.status(500).json({ ok: false, error: error.message });
