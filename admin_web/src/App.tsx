@@ -10,7 +10,7 @@ import {
   paymentStatusLabel,
   roleLabel,
 } from './adminUi';
-import synoLogo from './assets/brand/syno-logo-horizontal.png';
+import synoLogoMark from './assets/brand/syno-logo-mark.png';
 
 // Use Vite environment variables (VITE_ prefix required)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
@@ -67,12 +67,8 @@ function LoginScreen({ onLogin }) {
         background: '#fff', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
         padding: '2.5rem 2rem', width: 380, maxWidth: '95vw',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <img
-            src={synoLogo}
-            alt="SYNO"
-            style={{ width: 220, maxWidth: '100%', margin: '0 auto 12px', display: 'block' }}
-          />
+        <div style={{ marginBottom: '1.5rem' }}>
+          <BrandIdentity />
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>Cổng quản trị SYNO</h1>
           <p style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Nền tảng SaaS cho nhiều trường</p>
         </div>
@@ -121,6 +117,24 @@ const inputStyle: CSSProperties = {
   border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none',
   boxSizing: 'border-box', color: '#1e293b',
 };
+
+function BrandIdentity({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`flex items-center ${compact ? 'gap-2' : 'justify-center gap-3'}`}>
+      <span className={`${compact ? 'h-11 w-11' : 'h-14 w-14'} flex shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200`}>
+        <img src={synoLogoMark} alt="" className="h-10 w-10 object-contain" />
+      </span>
+      <span className={compact ? 'text-left' : 'text-left'}>
+        <span className={`${compact ? 'text-xl' : 'text-3xl'} block font-black leading-none tracking-normal text-slate-950`}>
+          SYNO
+        </span>
+        <span className={`${compact ? 'text-[10px]' : 'text-xs'} block font-semibold uppercase tracking-normal text-slate-500`}>
+          Kết nối - Đồng bộ - Phát triển
+        </span>
+      </span>
+    </div>
+  );
+}
 
 function ModuleSearch({ value, onChange, placeholder, count, total }) {
   return (
@@ -1146,11 +1160,7 @@ function AppShell({ authToken, authUser, onLogout }) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="mr-3 flex items-center gap-3">
-            <img src={synoLogo} alt="SYNO" className="h-12 w-auto" />
-            <div>
-              <h1 className="text-xl font-bold text-slate-950">SYNO Admin</h1>
-              <p className="text-xs font-medium text-slate-500">Kết nối - Đồng bộ - Phát triển</p>
-            </div>
+            <BrandIdentity compact />
           </div>
           <button
             onClick={loadStudents}

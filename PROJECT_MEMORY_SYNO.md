@@ -550,3 +550,15 @@ Kết quả mọi task phải nêu rõ:
   - FCM push tren device phu huynh that;
   - attendance -> notification -> parent app refresh;
   - admin_web/super_admin_web end-to-end.
+
+---
+
+## 23) Logo and brand UI directive (May 27, 2026)
+
+- User directive: logo UI phai dung va chuyen nghiep; khong duoc chi cat mot anh roi gan vao man hinh cho co.
+- Khi hien thi logo SYNO trong web/app:
+  1. uu tien dung logo mark asset lam bieu tuong co khung/tile/spacing ro rang;
+  2. render chu "SYNO" va tagline bang text/CSS khi can thay vi phu thuoc vao anh horizontal co nen/khoang trang;
+  3. giu ti le, object-fit contain, khong crop, khong stretch;
+  4. header/login phai co layout brand component rieng, canh baseline/spacing dung vai tro UI;
+  5. neu can dung anh horizontal, chi dung trong khung co kich thuoc phu hop va khong cat mat logo/tagline.

@@ -134,3 +134,12 @@ Status: completed; committed and pushed in the current slice.
 - Let staff filter chat by student, review message history, and send replies.
 - Connect UI to `/api/v1/admin-web/chat/messages`.
 - Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `git diff --check`.
+
+### Slice 15 - Brand Logo Component Polish
+
+Status: completed; committed and pushed in the current slice.
+
+- Treat SYNO logo as a composed brand UI component, not a cropped horizontal image pasted into the screen.
+- Use logo mark assets with stable tile sizing, spacing, rendered `SYNO` text, and the correct tagline on Admin Web, Super Admin Web, and the parent app.
+- Preserve image aspect ratio with `object-contain` / `BoxFit.contain`; avoid crop and stretch.
+- Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `corepack pnpm --filter super_admin_web run typecheck`, `corepack pnpm --filter super_admin_web run build`, `flutter analyze`, `flutter test`, `git diff --check`.

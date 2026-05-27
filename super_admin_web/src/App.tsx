@@ -6,7 +6,7 @@ import {
   statusBadgeClass,
   userStatusLabel,
 } from './platformUi';
-import synoLogo from './assets/brand/syno-logo-horizontal.png';
+import synoLogoMark from './assets/brand/syno-logo-mark.png';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
 const PLATFORM_API = `${API_BASE}/platform-admin`;
@@ -14,6 +14,22 @@ const AUTH_TOKEN_KEY = 'super_admin_web_token';
 const AUTH_USER_KEY = 'super_admin_web_user';
 const TEST_PASSWORD = '123456';
 const API_CONNECTION_ERROR = 'Không thể kết nối đến backend SYNO. Hãy kiểm tra API server đang chạy ở http://127.0.0.1:3000.';
+
+function BrandIdentity({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`flex items-center ${compact ? 'gap-2' : 'justify-center gap-3'}`}>
+      <span className={`${compact ? 'h-11 w-11' : 'h-14 w-14'} flex shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200`}>
+        <img src={synoLogoMark} alt="" className="h-10 w-10 object-contain" />
+      </span>
+      <span className="text-left">
+        <span className={`${compact ? 'text-xl' : 'text-3xl'} block font-black leading-none tracking-normal text-slate-950`}>SYNO</span>
+        <span className={`${compact ? 'text-[10px]' : 'text-xs'} block font-semibold uppercase tracking-normal text-slate-500`}>
+          Kết nối - Đồng bộ - Phát triển
+        </span>
+      </span>
+    </div>
+  );
+}
 
 type AuthUser = {
   id: string;
@@ -100,7 +116,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-100 px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <img src={synoLogo} alt="SYNO" className="mx-auto mb-4 h-14 w-auto" />
+        <BrandIdentity />
         <h1 className="text-center text-xl font-bold">Quản trị SYNO</h1>
         <p className="mb-5 mt-1 text-center text-sm text-slate-500">SYNO Super Admin</p>
         <label className="mb-3 block text-sm font-semibold">
@@ -304,7 +320,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <img src={synoLogo} alt="SYNO" className="h-12 w-auto" />
+          <BrandIdentity compact />
           <div>
             <h1 className="text-xl font-bold">Quản trị SYNO</h1>
             <p className="text-xs font-medium text-slate-500">SYNO Super Admin</p>
