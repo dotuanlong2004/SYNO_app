@@ -577,3 +577,24 @@ Kết quả mọi task phải nêu rõ:
   - uu tien tông xanh logo SYNO lam mau chu dao;
   - dung mau phu co kiem soat cho trang thai/thong bao, khong lam lech brand;
   - kiem tra text khong dau va sua thanh tieng Viet co dau truoc khi commit.
+
+---
+
+## 25) Restricted ownership for hardware and Firebase push (May 27, 2026)
+
+- User directive: Gemini/other agents must not modify hardware collector or Firebase push notification implementation.
+- Reserved owner: Codex handles these two areas:
+  1. Ronald Jack AI-X1 hardware collector and real hardware integration.
+  2. Firebase Cloud Messaging push path, including real device-token push tests.
+- Gemini/other agents may read related docs/status for context, but must not edit:
+  - `hardware-collector/`
+  - backend Firebase Admin / push services
+  - FCM token registration or push dispatch logic
+  - notification queue/worker code that changes real push behavior
+- Gemini/other agents should focus on:
+  - parent app UI/UX and Vietnamese text polish
+  - native app name/icon/brand identity
+  - Admin Web and Super Admin Web UI polish
+  - non-hardware, non-FCM business features from the roadmap
+  - docs/audit/checklists that do not alter hardware or push runtime behavior
+- If a feature needs attendance or notification data, Gemini should consume existing APIs/contracts only and leave push/hardware behavior unchanged.
