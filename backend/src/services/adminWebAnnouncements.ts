@@ -3,6 +3,7 @@
 type AnnouncementInput = {
   title?: unknown;
   content?: unknown;
+  priority?: unknown;
   is_general?: unknown;
   send_notification?: unknown;
 };
@@ -16,11 +17,22 @@ type AnnouncementRecord = {
   id: number | string;
   title: string;
   content: string;
+  priority?: string | null;
   school_id: string;
 };
 
+const ALLOWED_PRIORITIES = new Set(['normal', 'high', 'urgent']);
+
 export function shouldSendAnnouncementPush(input: AnnouncementInput): boolean {
   return input?.send_notification === true || String(input?.send_notification || '').toLowerCase() === 'true';
+}
+
+export function normalizeAnnouncementPriority(value: unknown): string {
+  const priority = String(value || 'normal').trim().toLowerCase();
+  if (!ALLOWED_PRIORITIES.has(priority)) {
+    throw new Error('priority must be normal, high, or urgent');
+  }
+  return priority;
 }
 
 export function buildAnnouncementPayload({ input, schoolId }: BuildAnnouncementPayloadInput) {
@@ -33,6 +45,7 @@ export function buildAnnouncementPayload({ input, schoolId }: BuildAnnouncementP
   return {
     title,
     content,
+    priority: normalizeAnnouncementPriority(input?.priority),
     is_general: input?.is_general !== undefined ? Boolean(input.is_general) : true,
     school_id: schoolId,
   };
@@ -52,6 +65,7 @@ export function buildAnnouncementPushPayload({
     data: {
       type: 'announcement',
       announcement_id: String(announcement.id),
+      priority: String(announcement.priority || 'normal'),
       school_id: String(announcement.school_id),
     },
   };

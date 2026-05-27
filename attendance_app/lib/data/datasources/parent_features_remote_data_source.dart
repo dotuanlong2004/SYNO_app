@@ -80,6 +80,7 @@ class ParentFeaturesRemoteDataSource {
           id: (json['id'] as num?)?.toInt() ?? 0,
           title: '${json['title'] ?? ''}',
           content: '${json['content'] ?? ''}',
+          priority: '${json['priority'] ?? 'normal'}',
           publishedAt: json['published_at'] == null
               ? null
               : DateTime.tryParse('${json['published_at']}'),

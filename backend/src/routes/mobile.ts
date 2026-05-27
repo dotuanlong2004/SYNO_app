@@ -243,7 +243,7 @@ router.get('/announcements', mobileAuth, async (req, res) => {
   try {
     const { data, error } = await getSupabase()
       .from('announcements')
-      .select('id, title, content, is_general, published_at')
+      .select('id, title, content, priority, is_general, published_at')
       .eq('school_id', schoolId)
       .order('published_at', { ascending: false })
       .limit(100);

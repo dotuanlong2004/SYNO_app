@@ -1590,6 +1590,28 @@ class _FeeRow extends StatelessWidget {
 class _NewsTab extends ConsumerWidget {
   const _NewsTab();
 
+  String _priorityLabel(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'urgent':
+        return 'Khẩn cấp';
+      case 'high':
+        return 'Quan trọng';
+      default:
+        return 'Bình thường';
+    }
+  }
+
+  Color _priorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'urgent':
+        return AppTheme.errorColor;
+      case 'high':
+        return AppTheme.accentOrange;
+      default:
+        return AppTheme.primaryColor;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final announcementsAsync = ref.watch(announcementsProvider);
@@ -1614,6 +1636,7 @@ class _NewsTab extends ConsumerWidget {
               final isNew =
                   item.publishedAt != null &&
                   DateTime.now().difference(item.publishedAt!).inDays < 3;
+              final priorityColor = _priorityColor(item.priority);
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
@@ -1621,7 +1644,7 @@ class _NewsTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(16),
                   border: isNew
                       ? Border.all(
-                          color: AppTheme.primaryOrange.withAlpha(80),
+                          color: priorityColor.withAlpha(80),
                           width: 1.5,
                         )
                       : null,
@@ -1640,13 +1663,13 @@ class _NewsTab extends ConsumerWidget {
                     height: 44,
                     decoration: BoxDecoration(
                       color: isNew
-                          ? AppTheme.primaryOrange.withAlpha(20)
+                          ? priorityColor.withAlpha(20)
                           : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.campaign_rounded,
-                      color: isNew ? AppTheme.primaryOrange : Colors.grey,
+                      color: isNew ? priorityColor : Colors.grey,
                       size: 22,
                     ),
                   ),
@@ -1686,6 +1709,25 @@ class _NewsTab extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: priorityColor.withAlpha(18),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _priorityLabel(item.priority),
+                          style: TextStyle(
+                            color: priorityColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
                         item.content,
                         style: TextStyle(color: Colors.grey[700], fontSize: 13),
@@ -1763,20 +1805,20 @@ class _NewsTab extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryOrange.withAlpha(20),
+                    color: _priorityColor(item.priority).withAlpha(20),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.campaign_rounded,
-                    color: AppTheme.primaryOrange,
+                    color: _priorityColor(item.priority),
                     size: 20,
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Text(
+                Text(
                   'Thông báo',
                   style: TextStyle(
-                    color: AppTheme.primaryOrange,
+                    color: _priorityColor(item.priority),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1786,6 +1828,28 @@ class _NewsTab extends ConsumerWidget {
             Text(
               item.title,
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: _priorityColor(item.priority).withAlpha(18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _priorityLabel(item.priority),
+                  style: TextStyle(
+                    color: _priorityColor(item.priority),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
             if (item.publishedAt != null) ...[
               const SizedBox(height: 6),

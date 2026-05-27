@@ -219,6 +219,7 @@ function AppShell({ authToken, authUser, onLogout }) {
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     content: '',
+    priority: 'normal',
     is_general: true,
     send_notification: false,
   });
@@ -1080,7 +1081,7 @@ function AppShell({ authToken, authUser, onLogout }) {
         headers: adminHeaders,
         body: JSON.stringify(announcementForm),
       });
-      setAnnouncementForm({ title: '', content: '', is_general: true, send_notification: false });
+      setAnnouncementForm({ title: '', content: '', priority: 'normal', is_general: true, send_notification: false });
       await loadAnnouncements();
     } catch (error) {
       setMessage(error.message);
@@ -1914,6 +1915,17 @@ function AppShell({ authToken, authUser, onLogout }) {
                   setAnnouncementForm((prev) => ({ ...prev, content: e.target.value }))
                 }
               />
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={announcementForm.priority}
+                onChange={(e) =>
+                  setAnnouncementForm((prev) => ({ ...prev, priority: e.target.value }))
+                }
+              >
+                <option value="normal">Bình thường</option>
+                <option value="high">Quan trọng</option>
+                <option value="urgent">Khẩn cấp</option>
+              </select>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -1949,7 +1961,18 @@ function AppShell({ authToken, authUser, onLogout }) {
               {filteredAnnouncements.map((item) => (
                 <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <strong>{item.title}</strong>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong>{item.title}</strong>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        item.priority === 'urgent'
+                          ? 'bg-rose-100 text-rose-700'
+                          : item.priority === 'high'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {item.priority === 'urgent' ? 'Khẩn cấp' : item.priority === 'high' ? 'Quan trọng' : 'Bình thường'}
+                      </span>
+                    </div>
                     <button
                       onClick={() => deleteAnnouncement(item.id)}
                       className="rounded bg-rose-100 px-2 py-1 text-rose-700"

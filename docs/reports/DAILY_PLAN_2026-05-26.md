@@ -191,3 +191,14 @@ Status: completed; committed and pushed in the current slice.
 - Fix Super Admin visible tab, status, reset-password, and audit labels to Vietnamese with accents.
 - Keep internal enum values and import aliases unchanged where they are data/API contracts.
 - Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `corepack pnpm --filter super_admin_web run typecheck`, `corepack pnpm --filter super_admin_web run build`, `git diff --check`.
+
+### Slice 21 - Announcement Priority Completion
+
+Status: completed; commit pending in the current slice.
+
+- Add `priority` support for announcements as required by docs (`normal`, `high`, `urgent`).
+- Add a Supabase migration for the announcement priority column and check constraint.
+- Validate/default priority in backend announcement payloads and include priority in FCM data.
+- Add Admin Web priority selector and priority badges in announcement lists.
+- Show priority badges in the parent app announcement list and detail view.
+- Verification: `corepack pnpm --filter backend test`, `corepack pnpm --filter backend build`, `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `flutter analyze`, `flutter test`, `git diff --check`.
