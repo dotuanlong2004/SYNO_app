@@ -202,3 +202,12 @@ Status: completed; commit pending in the current slice.
 - Add Admin Web priority selector and priority badges in announcement lists.
 - Show priority badges in the parent app announcement list and detail view.
 - Verification: `corepack pnpm --filter backend test`, `corepack pnpm --filter backend build`, `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `flutter analyze`, `flutter test`, `git diff --check`.
+
+### Slice 22 - Admin Sync Monitoring UI
+
+Status: completed; commit pending in the current slice.
+
+- Add Admin Web `Đồng bộ hệ thống` tab for roadmap Phase 2 sync monitoring.
+- Surface backend health, Supabase health, attendance queue status, latest attendance sync, linked parents, and tracked chat volume.
+- Keep this as a UI/service-linkage slice; real device and real push tests remain deferred to final integration pass.
+- Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `git diff --check`.

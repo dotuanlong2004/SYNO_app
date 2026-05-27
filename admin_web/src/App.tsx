@@ -14,6 +14,7 @@ import synoLogoMark from './assets/brand/syno-logo-mark.png';
 
 // Use Vite environment variables (VITE_ prefix required)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
+const HEALTH_API = API_BASE.replace(/\/api\/v1\/?$/, '/health');
 const DEFAULT_SCHOOL_ID = import.meta.env.VITE_DEFAULT_SCHOOL_ID || '1';
 const ADMIN_WEB_API = `${API_BASE}/admin-web`;
 const AUTH_TOKEN_KEY = 'admin_web_token';
@@ -235,6 +236,7 @@ function AppShell({ authToken, authUser, onLogout }) {
     student_code: '',
     message_text: '',
   });
+  const [systemHealth, setSystemHealth] = useState(null);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [attendanceFilters, setAttendanceFilters] = useState({
     student_code: '',
@@ -303,6 +305,7 @@ function AppShell({ authToken, authUser, onLogout }) {
         setGrades(gradesJson.data || []);
         setChatMessages(chatJson.data || []);
         setAttendanceLogs(attendanceJson.data || []);
+        loadSystemHealth().catch(() => {});
       })
       .catch((error) => {
         setMessage(error.message);
@@ -339,6 +342,15 @@ function AppShell({ authToken, authUser, onLogout }) {
       throw new Error(json.error || `Lỗi từ ${url} (HTTP ${response.status})`);
     }
     return json;
+  }
+
+  async function loadSystemHealth() {
+    try {
+      const json = await requestJson(HEALTH_API);
+      setSystemHealth(json);
+    } catch (error) {
+      setSystemHealth({ ok: false, error: error.message || 'Không thể tải trạng thái backend' });
+    }
   }
 
   async function loadStudents() {
@@ -502,6 +514,25 @@ function AppShell({ authToken, authUser, onLogout }) {
       ['Điểm danh mới nhất', latestAttendance],
     ];
   }, [students.length, timetables.length, fees, attendanceLogs]);
+
+  const syncStatus = useMemo(() => {
+    const latestAttendanceAt = attendanceLogs[0]?.scanned_at ? new Date(attendanceLogs[0].scanned_at) : null;
+    const minutesSinceAttendance = latestAttendanceAt
+      ? Math.floor((Date.now() - latestAttendanceAt.getTime()) / 60000)
+      : null;
+
+    return {
+      backendOk: systemHealth?.ok === true,
+      supabaseUp: systemHealth?.supabase === 'up',
+      queueEnabled: systemHealth?.queue === 'enabled',
+      latestAttendance: latestAttendanceAt ? formatDateTime(latestAttendanceAt.toISOString()) : 'Chưa có dữ liệu',
+      minutesSinceAttendance,
+      totalParents: parents.length,
+      totalAnnouncements: announcements.length,
+      totalChatMessages: chatMessages.length,
+      error: systemHealth?.error || '',
+    };
+  }, [systemHealth, attendanceLogs, parents.length, announcements.length, chatMessages.length]);
 
   function showImportToast(type, message) {
     setImportToast({ type, message });
@@ -1208,6 +1239,7 @@ function AppShell({ authToken, authUser, onLogout }) {
             ['grades', 'Bảng điểm'],
             ['chat', 'Tin nhắn'],
             ['attendance', 'Điểm danh'],
+            ['system', 'Đồng bộ hệ thống'],
             ['device', 'Giả lập Quẹt thẻ'],
           ].map(([value, label]) => (
             <button
@@ -2262,6 +2294,60 @@ function AppShell({ authToken, authUser, onLogout }) {
               </table>
             </div>
             {attendanceLogs.length === 0 ? <EmptyState message="Chưa có dữ liệu điểm danh theo bộ lọc hiện tại." /> : null}
+          </section>
+        ) : null}
+
+        {tab === 'system' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Giám sát đồng bộ hệ thống</h2>
+                <p className="text-sm text-slate-500">
+                  Theo dõi nhanh backend, Supabase, hàng đợi và dữ liệu đồng bộ gần nhất.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  loadAttendanceLogs();
+                  loadChatMessages(chatForm.student_code);
+                  loadSystemHealth();
+                }}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Tải lại trạng thái
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                ['Backend API', syncStatus.backendOk ? 'Đang hoạt động' : 'Cần kiểm tra', syncStatus.backendOk],
+                ['Supabase', syncStatus.supabaseUp ? 'Đang hoạt động' : 'Cần kiểm tra', syncStatus.supabaseUp],
+                ['Hàng đợi điểm danh', syncStatus.queueEnabled ? 'Đang bật' : 'Chưa bật', syncStatus.queueEnabled],
+              ].map(([label, value, ok]) => (
+                <div key={String(label)} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                  <div className={`mt-2 text-lg font-bold ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>{value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              {[
+                ['Điểm danh mới nhất', syncStatus.latestAttendance],
+                ['Từ lần điểm danh cuối', syncStatus.minutesSinceAttendance == null ? 'Chưa có' : `${syncStatus.minutesSinceAttendance} phút`],
+                ['Phụ huynh liên kết', syncStatus.totalParents],
+                ['Tin nhắn đang theo dõi', syncStatus.totalChatMessages],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-xl border border-slate-200 p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                  <div className="mt-2 text-lg font-bold text-slate-950">{value}</div>
+                </div>
+              ))}
+            </div>
+            {syncStatus.error ? (
+              <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {syncStatus.error}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
