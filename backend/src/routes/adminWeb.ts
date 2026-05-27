@@ -15,7 +15,10 @@ const {
   shouldSendAnnouncementPush,
   summarizePushResults,
 } = require('../services/adminWebAnnouncements');
-const { buildStaffChatMessagePayload } = require('../services/adminWebChatMessages');
+const {
+  buildStaffChatMessagePayload,
+  buildStaffChatPushPayload,
+} = require('../services/adminWebChatMessages');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { buildGradePayload } = require('../services/adminWebGrades');
 const { buildStudentBulkPayload, buildStudentPayload } = require('../services/adminWebStudents');
@@ -592,7 +595,7 @@ router.post('/chat/messages', async (req, res) => {
 
   const { data: student } = await supabase
     .from('students')
-    .select('id')
+    .select('id, parent_id')
     .eq('school_id', req.schoolId)
     .eq('student_code', payload.student_code)
     .maybeSingle();
@@ -604,14 +607,70 @@ router.post('/chat/messages', async (req, res) => {
   const { data, error } = await supabase
     .from('chat_messages')
     .insert(payload)
-    .select('id, student_code, sender_role, sender_name, message_text, created_at')
+    .select('id, school_id, student_code, sender_role, sender_name, message_text, created_at')
     .single();
 
   if (error) {
     return res.status(500).json({ ok: false, error: error.message });
   }
 
-  return res.status(201).json({ ok: true, data });
+  if (!student.parent_id) {
+    return res.status(201).json({
+      ok: true,
+      data,
+      notification: { attempted: 0, sent: 0, failed: 0 },
+    });
+  }
+
+  const { data: parentProfile, error: parentError } = await supabase
+    .from('user_profiles')
+    .select('id, fcm_token')
+    .eq('id', student.parent_id)
+    .eq('school_id', req.schoolId)
+    .eq('role', 'parent')
+    .maybeSingle();
+
+  if (parentError) {
+    console.warn('[admin-chat] Failed to load parent FCM token:', parentError.message);
+    return res.status(201).json({
+      ok: true,
+      data,
+      notification: {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        error: parentError.message,
+      },
+    });
+  }
+
+  if (!parentProfile?.fcm_token) {
+    return res.status(201).json({
+      ok: true,
+      data,
+      notification: { attempted: 0, sent: 0, failed: 0 },
+    });
+  }
+
+  try {
+    await sendPushNotification(buildStaffChatPushPayload({
+      token: parentProfile.fcm_token,
+      message: data,
+    }));
+
+    return res.status(201).json({
+      ok: true,
+      data,
+      notification: summarizePushResults([{ ok: true }]),
+    });
+  } catch (pushError) {
+    console.warn('[admin-chat] FCM send failed:', pushError.message);
+    return res.status(201).json({
+      ok: true,
+      data,
+      notification: summarizePushResults([{ ok: false }]),
+    });
+  }
 });
 
 // DELETE /admin-web/announcements/:id

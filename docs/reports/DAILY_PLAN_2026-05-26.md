@@ -143,3 +143,13 @@ Status: completed; committed and pushed in the current slice.
 - Use logo mark assets with stable tile sizing, spacing, rendered `SYNO` text, and the correct tagline on Admin Web, Super Admin Web, and the parent app.
 - Preserve image aspect ratio with `object-contain` / `BoxFit.contain`; avoid crop and stretch.
 - Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `corepack pnpm --filter super_admin_web run typecheck`, `corepack pnpm --filter super_admin_web run build`, `flutter analyze`, `flutter test`, `git diff --check`.
+
+### Slice 16 - Admin Chat Reply Push Linkage
+
+Status: completed; committed and pushed in the current slice.
+
+- Link Admin Web chat replies to the existing backend FCM service as a best-effort notification path.
+- Keep chat message creation independent from push delivery failures.
+- Scope parent token lookup by `student.parent_id`, `school_id`, and parent role.
+- Add contract coverage for parent-facing chat push payloads.
+- Verification: `corepack pnpm --filter backend test`, `corepack pnpm --filter backend build`, `git diff --check`.

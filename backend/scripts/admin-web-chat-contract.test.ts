@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 
-import { buildStaffChatMessagePayload, normalizeChatMessageText } from '../src/services/adminWebChatMessages';
+import {
+  buildStaffChatMessagePayload,
+  buildStaffChatPushPayload,
+  normalizeChatMessageText,
+} from '../src/services/adminWebChatMessages';
 
 function test(name: string, fn: () => void) {
   try {
@@ -48,4 +52,27 @@ test('buildStaffChatMessagePayload requires student_code', () => {
     }),
     /student_code is required/,
   );
+});
+
+test('buildStaffChatPushPayload creates parent-facing chat notification data', () => {
+  const payload = buildStaffChatPushPayload({
+    token: 'device-token',
+    message: {
+      id: 42,
+      school_id: '1',
+      student_code: 'HS001',
+      sender_name: 'Co Lan',
+      message_text: 'Noi dung tin nhan chat rat dai can duoc cat ngan de payload notification gon hon trong khay thong bao cua dien thoai phu huynh.',
+    },
+  });
+
+  assert.equal(payload.token, 'device-token');
+  assert.equal(payload.title, 'Tin nhắn mới từ SYNO');
+  assert.equal(payload.body.length, 120);
+  assert.deepEqual(payload.data, {
+    type: 'chat_message',
+    chat_message_id: '42',
+    student_code: 'HS001',
+    school_id: '1',
+  });
 });

@@ -18,6 +18,14 @@ type BuildStaffChatMessagePayloadInput = {
   sender: SenderInput;
 };
 
+type StaffChatMessageRecord = {
+  id: number | string;
+  school_id: string;
+  student_code: string;
+  sender_name: string;
+  message_text: string;
+};
+
 export function normalizeChatMessageText(value: unknown): string {
   const text = String(value || '').trim();
   if (!text) {
@@ -48,5 +56,25 @@ export function buildStaffChatMessagePayload({
     sender_id: String(sender.id || ''),
     sender_name: senderName,
     message_text: normalizeChatMessageText(row.message_text),
+  };
+}
+
+export function buildStaffChatPushPayload({
+  token,
+  message,
+}: {
+  token: string;
+  message: StaffChatMessageRecord;
+}) {
+  return {
+    token,
+    title: 'Tin nhắn mới từ SYNO',
+    body: message.message_text.slice(0, 120),
+    data: {
+      type: 'chat_message',
+      chat_message_id: String(message.id),
+      student_code: String(message.student_code),
+      school_id: String(message.school_id),
+    },
   };
 }
