@@ -29,7 +29,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _changePassword() async {
     if (_newPasswordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mật khẩu mới không khớp'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Mật khẩu mới không khớp'),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       return;
     }
@@ -39,10 +42,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       // Lấy dio client đã có token xác thực
       final dio = ref.read(dioProvider);
-      final response = await dio.post('/api/v1/auth/change-password', data: {
-        'old_password': _oldPasswordController.text,
-        'new_password': _newPasswordController.text,
-      });
+      final response = await dio.post(
+        '/api/v1/auth/change-password',
+        data: {
+          'old_password': _oldPasswordController.text,
+          'new_password': _newPasswordController.text,
+        },
+      );
 
       if (!mounted) return;
       if (response.data['ok'] == true) {
@@ -51,7 +57,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _confirmPasswordController.clear();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đổi mật khẩu thành công'), backgroundColor: Colors.green),
+            const SnackBar(
+              content: Text('Đổi mật khẩu thành công'),
+              backgroundColor: AppTheme.successColor,
+            ),
           );
         }
       } else {
@@ -60,7 +69,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Lỗi: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
         );
       }
     } finally {
@@ -75,10 +87,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         title: const Text('Đăng xuất'),
         content: const Text('Bạn có chắc muốn đăng xuất?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Đăng xuất',
+              style: TextStyle(color: AppTheme.errorColor),
+            ),
           ),
         ],
       ),
@@ -101,10 +119,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final userName = user?.fullName ?? 'Người dùng';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cài đặt'),
-        backgroundColor: AppTheme.primaryRed,
-      ),
+      appBar: AppBar(title: const Text('Cài đặt')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -119,8 +134,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     children: [
                       CircleAvatar(
                         radius: 30,
-                        backgroundColor: AppTheme.primaryRed.withAlpha(30),
-                        child: Icon(Icons.person, color: AppTheme.primaryRed, size: 32),
+                        backgroundColor: AppTheme.brandSurface,
+                        child: Icon(
+                          Icons.person,
+                          color: AppTheme.primaryColor,
+                          size: 32,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -129,19 +148,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           children: [
                             Text(
                               userName,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            Text(userEmail, style: TextStyle(color: Colors.grey[600])),
+                            Text(
+                              userEmail,
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
                             Chip(
                               label: Text(
                                 userRole == 'admin'
                                     ? 'Quản trị viên'
                                     : userRole == 'teacher'
-                                        ? 'Giáo viên'
-                                        : 'Phụ huynh',
+                                    ? 'Giáo viên'
+                                    : 'Phụ huynh',
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              backgroundColor: AppTheme.primaryRed.withAlpha(20),
+                              backgroundColor: AppTheme.primaryColor.withAlpha(
+                                20,
+                              ),
                               side: BorderSide.none,
                             ),
                           ],
@@ -210,7 +239,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text('Đổi mật khẩu'),
                     ),
@@ -226,13 +258,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: Column(
               children: [
                 ListTile(
-                  leading: Icon(Icons.info_outline, color: Colors.grey[600]),
+                  leading: const Icon(
+                    Icons.info_outline,
+                    color: AppTheme.primaryColor,
+                  ),
                   title: const Text('Về SYNO'),
                   subtitle: const Text('Phiên bản 1.0.0'),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.school, color: Colors.grey[600]),
+                  leading: const Icon(
+                    Icons.school,
+                    color: AppTheme.primaryColor,
+                  ),
                   title: const Text('SYNO'),
                   subtitle: const Text('Nền tảng trường học thông minh'),
                 ),
@@ -249,7 +287,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               icon: const Icon(Icons.logout),
               label: const Text('Đăng xuất'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: AppTheme.errorColor,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -271,7 +309,7 @@ class _StudentInfoCard extends ConsumerWidget {
         if (students.isEmpty) {
           return Card(
             child: ListTile(
-              leading: Icon(Icons.child_care, color: AppTheme.primaryBlue),
+              leading: Icon(Icons.child_care, color: AppTheme.primaryColor),
               title: const Text('Chưa có thông tin con'),
               subtitle: const Text('Vui lòng liên hệ nhà trường để liên kết'),
             ),
@@ -286,7 +324,7 @@ class _StudentInfoCard extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(
                   children: [
-                    Icon(Icons.child_care, color: AppTheme.primaryBlue),
+                    Icon(Icons.child_care, color: AppTheme.primaryColor),
                     const SizedBox(width: 12),
                     Text(
                       'Thông tin con',
@@ -298,19 +336,27 @@ class _StudentInfoCard extends ConsumerWidget {
                 ),
               ),
               const Divider(height: 1),
-              ...students.map((s) => ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppTheme.primaryBlue.withAlpha(30),
-                  child: Text(s.fullName.substring(0, 1), style: TextStyle(color: AppTheme.primaryBlue)),
+              ...students.map(
+                (s) => ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.brandSurface,
+                    child: Text(
+                      s.fullName.substring(0, 1),
+                      style: const TextStyle(color: AppTheme.primaryColor),
+                    ),
+                  ),
+                  title: Text(s.fullName),
+                  subtitle: Text('Mã: ${s.studentCode} | Lớp: ${s.className}'),
+                  trailing: Chip(
+                    label: const Text(
+                      'Đã liên kết',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    backgroundColor: Colors.green.withAlpha(20),
+                    side: BorderSide.none,
+                  ),
                 ),
-                title: Text(s.fullName),
-                subtitle: Text('Mã: ${s.studentCode} | Lớp: ${s.className}'),
-                trailing: Chip(
-                  label: const Text('Đã liên kết', style: TextStyle(fontSize: 11)),
-                  backgroundColor: Colors.green.withAlpha(20),
-                  side: BorderSide.none,
-                ),
-              )),
+              ),
             ],
           ),
         );
@@ -323,7 +369,7 @@ class _StudentInfoCard extends ConsumerWidget {
       ),
       error: (e, _) => Card(
         child: ListTile(
-          leading: Icon(Icons.error, color: Colors.red),
+          leading: Icon(Icons.error, color: AppTheme.errorColor),
           title: const Text('Không thể tải thông tin con'),
           subtitle: Text('Lỗi: $e'),
         ),

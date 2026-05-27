@@ -61,7 +61,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final selectedIndex = _tabIndex >= pages.length ? 0 : _tabIndex;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.lightGrayBackground,
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8),
@@ -143,7 +143,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
           ListTile(
             leading: const Icon(Icons.forum_rounded),
-            title: const Text('Tin nhan'),
+            title: const Text('Tin nhắn'),
             onTap: () {
               Navigator.pop(context);
               _showChatDialog(context);
@@ -185,7 +185,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: const Text('Học phí')),
-          backgroundColor: Colors.grey[50],
+          backgroundColor: AppTheme.lightGrayBackground,
           body: const _FeesTab(),
         ),
       ),
@@ -198,7 +198,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: const Text('Thông báo')),
-          backgroundColor: Colors.grey[50],
+          backgroundColor: AppTheme.lightGrayBackground,
           body: const _NewsTab(),
         ),
       ),
@@ -211,7 +211,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: const Text('Bảng điểm')),
-          backgroundColor: Colors.grey[50],
+          backgroundColor: AppTheme.lightGrayBackground,
           body: const _GradesTab(),
         ),
       ),
@@ -223,8 +223,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       context,
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Tin nhan')),
-          backgroundColor: Colors.grey[50],
+          appBar: AppBar(title: const Text('Tin nhắn')),
+          backgroundColor: AppTheme.lightGrayBackground,
           body: const _ChatTab(),
         ),
       ),

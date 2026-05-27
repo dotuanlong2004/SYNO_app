@@ -50,7 +50,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 'Tài khoản Admin/Giáo viên vui lòng đăng nhập tại cổng quản trị web.',
               ),
               duration: Duration(seconds: 5),
-              backgroundColor: Colors.orange,
+              backgroundColor: AppTheme.accentOrange,
             ),
           );
         }

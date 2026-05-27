@@ -172,3 +172,13 @@ Status: completed; committed and pushed in the current slice.
 - Convert chat UI copy and chat error messages to Vietnamese with accents.
 - Keep notification channel/app title under the SYNO brand.
 - Verification: `flutter analyze`, `flutter test`, `git diff --check`.
+
+### Slice 19 - Parent App Shell Text And Settings Polish
+
+Status: completed; committed and pushed in the current slice.
+
+- Fix remaining parent app shell labels such as `Tin nhắn` to Vietnamese with accents.
+- Move Settings account surfaces back to SYNO blue/brand surface instead of using red as a primary UI color.
+- Keep red only for destructive/error states and orange only for warning states.
+- Normalize pushed dialog backgrounds to `AppTheme.lightGrayBackground`.
+- Verification: `flutter analyze`, `flutter test`, `git diff --check`.
