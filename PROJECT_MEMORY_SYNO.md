@@ -526,13 +526,16 @@ Kết quả mọi task phải nêu rõ:
 ## 21) Git progress rule (May 26, 2026)
 
 - User directive: lam toi dau day code len git toi do.
+- Updated directive (May 27, 2026): Gemini/other agents must not commit or push by themselves. Codex owns review, staging, commit, and push.
 - Sau moi lat cat tien do co y nghia:
   1. chay verification phu hop voi module;
-  2. kiem tra secret/build output khong bi stage;
-  3. commit nho theo conventional commit;
-  4. push len remote ngay.
+  2. Gemini/other agents report changed files and verification output;
+  3. Codex reviews diff, checks secret/build output, stages exact approved files;
+  4. Codex commits nho theo conventional commit;
+  5. Codex pushes len remote ngay.
 - Khong gom nhieu module lon vao mot commit neu co the tach an toan.
 - Neu push that bai vi network/auth/sandbox, bao ro va tiep tuc giu working tree co the commit/push lai.
+- Gemini/other agents must not run `git add`, `git commit`, or `git push` unless the user explicitly changes this rule later.
 
 ---
 
