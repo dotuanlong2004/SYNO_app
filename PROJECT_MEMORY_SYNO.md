@@ -601,3 +601,25 @@ Kết quả mọi task phải nêu rõ:
   - non-hardware, non-FCM business features from the roadmap
   - docs/audit/checklists that do not alter hardware or push runtime behavior
 - If a feature needs attendance or notification data, Gemini should consume existing APIs/contracts only and leave push/hardware behavior unchanged.
+
+---
+
+## 26) Reporting language and temporary file hygiene (May 27, 2026)
+
+- User directive: Gemini/other agents must report to the user in Vietnamese, with Vietnamese accents.
+- Gemini/other agents must not create or leave trash/temp files in the repository.
+- Forbidden repo artifacts unless Codex/user explicitly asks for them:
+  - `temp_docs.zip`
+  - `temp_docs_unzip/`
+  - ad-hoc `GEMINI_CHANGELOG.md`
+  - duplicate changelog/report files
+  - extracted DOCX/PDF working folders
+  - broken-encoding reports
+- If an agent needs to extract DOCX/PDF or create temporary analysis files, use a temp directory outside the repo or delete the temp artifacts before reporting.
+- Reports/checklists must be created only when requested, must use UTF-8 Vietnamese correctly, and must not claim stale facts contradicted by `CURRENT_STATUS.md`.
+- Gemini/other agents should report:
+  1. files changed;
+  2. commands run;
+  3. verification output;
+  4. files intentionally left for Codex review;
+  5. confirmation that no forbidden hardware/FCM files were modified.
