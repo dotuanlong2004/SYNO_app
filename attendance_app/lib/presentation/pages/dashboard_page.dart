@@ -1349,6 +1349,17 @@ class _FeesTab extends ConsumerWidget {
             message: 'Chưa có thông báo học phí',
           );
         }
+        final totalAmount = fees.fold<double>(
+          0,
+          (sum, fee) => sum + fee.totalAmount,
+        );
+        final paidAmount = fees
+            .where((fee) => fee.paymentStatus == 'paid')
+            .fold<double>(0, (sum, fee) => sum + fee.totalAmount);
+        final pendingAmount = fees
+            .where((fee) => fee.paymentStatus != 'paid')
+            .fold<double>(0, (sum, fee) => sum + fee.totalAmount);
+        final fmt = NumberFormat('#,###', 'vi');
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(feeNoticesProvider);
@@ -1356,14 +1367,150 @@ class _FeesTab extends ConsumerWidget {
           },
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            itemCount: fees.length,
-            itemBuilder: (context, index) => _FeeNoticeCard(fee: fees[index]),
+            itemCount: fees.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _FeeSummaryCard(
+                  totalAmount: totalAmount,
+                  paidAmount: paidAmount,
+                  pendingAmount: pendingAmount,
+                  paidCount: fees
+                      .where((fee) => fee.paymentStatus == 'paid')
+                      .length,
+                  totalCount: fees.length,
+                  formatter: fmt,
+                );
+              }
+              return _FeeNoticeCard(fee: fees[index - 1]);
+            },
           ),
         );
       },
       error: (e, _) => _ErrorState(message: 'Không thể tải học phí'),
       loading: () => const Center(
         child: CircularProgressIndicator(color: AppTheme.primaryOrange),
+      ),
+    );
+  }
+}
+
+class _FeeSummaryCard extends StatelessWidget {
+  const _FeeSummaryCard({
+    required this.totalAmount,
+    required this.paidAmount,
+    required this.pendingAmount,
+    required this.paidCount,
+    required this.totalCount,
+    required this.formatter,
+  });
+
+  final double totalAmount;
+  final double paidAmount;
+  final double pendingAmount;
+  final int paidCount;
+  final int totalCount;
+  final NumberFormat formatter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x220B2A6F),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Thống kê học phí',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Đã thanh toán $paidCount/$totalCount khoản',
+            style: const TextStyle(color: Color(0xFFC8D7F3), fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _FeeMetric(
+                  label: 'Tổng cần theo dõi',
+                  value: '${formatter.format(totalAmount)} đ',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _FeeMetric(
+                  label: 'Đã thanh toán',
+                  value: '${formatter.format(paidAmount)} đ',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _FeeMetric(
+            label: 'Còn cần theo dõi',
+            value: '${formatter.format(pendingAmount)} đ',
+            wide: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeMetric extends StatelessWidget {
+  const _FeeMetric({
+    required this.label,
+    required this.value,
+    this.wide = false,
+  });
+
+  final String label;
+  final String value;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: wide ? double.infinity : null,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withAlpha(28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xFFC8D7F3), fontSize: 11),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

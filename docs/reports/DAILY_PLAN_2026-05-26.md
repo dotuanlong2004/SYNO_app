@@ -211,3 +211,12 @@ Status: completed; commit pending in the current slice.
 - Surface backend health, Supabase health, attendance queue status, latest attendance sync, linked parents, and tracked chat volume.
 - Keep this as a UI/service-linkage slice; real device and real push tests remain deferred to final integration pass.
 - Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `git diff --check`.
+
+### Slice 23 - Parent Fee Spending Statistics
+
+Status: completed; commit pending in the current slice.
+
+- Add parent app học phí spending summary using existing fee notices.
+- Show total tracked amount, paid amount, pending amount, and paid/total count.
+- Keep this module data-driven from existing fee APIs without adding new schema.
+- Verification: `flutter analyze`, `flutter test`, `git diff --check`.
