@@ -118,7 +118,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <BrandIdentity />
         <h1 className="text-center text-xl font-bold">Quản trị SYNO</h1>
-        <p className="mb-5 mt-1 text-center text-sm text-slate-500">SYNO Super Admin</p>
+        <p className="mb-5 mt-1 text-center text-sm text-slate-500">Quản trị nền tảng SYNO</p>
         <label className="mb-3 block text-sm font-semibold">
           Email
           <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -323,7 +323,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
           <BrandIdentity compact />
           <div>
             <h1 className="text-xl font-bold">Quản trị SYNO</h1>
-            <p className="text-xs font-medium text-slate-500">SYNO Super Admin</p>
+            <p className="text-xs font-medium text-slate-500">Quản trị nền tảng SYNO</p>
           </div>
           <button onClick={loadData} className="rounded-md bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
             {loading ? 'Đang tải...' : 'Tải lại'}
@@ -355,7 +355,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
           {[
             ['schools', 'Trường'],
             ['users', 'Tài khoản admin'],
-            ['audit', 'Audit log'],
+            ['audit', 'Nhật ký kiểm toán'],
           ].map(([value, label]) => (
             <button key={value} onClick={() => setTab(value as any)} className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === value ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}>
               {label}
@@ -372,9 +372,9 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
               <input className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder="Tên trường" value={schoolForm.name} onChange={(e) => setSchoolForm((prev) => ({ ...prev, name: e.target.value }))} />
               <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Mã" value={schoolForm.code} onChange={(e) => setSchoolForm((prev) => ({ ...prev, code: e.target.value }))} />
               <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={schoolForm.status} onChange={(e) => setSchoolForm((prev) => ({ ...prev, status: e.target.value }))}>
-                <option value="active">active</option>
-                <option value="inactive">inactive</option>
-                <option value="suspended">suspended</option>
+                <option value="active">Đang hoạt động</option>
+                <option value="inactive">Tạm ngưng</option>
+                <option value="suspended">Bị khóa</option>
               </select>
               <button className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white">{editingSchoolId ? 'Cập nhật' : 'Tạo trường'}</button>
               <input className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-3" placeholder="Website" value={schoolForm.website_url} onChange={(e) => setSchoolForm((prev) => ({ ...prev, website_url: e.target.value }))} />
@@ -430,11 +430,11 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
 
             <form onSubmit={resetPassword} className="mb-5 flex flex-wrap items-center gap-2 rounded-md bg-slate-50 p-3">
               <select className="min-w-64 rounded-md border border-slate-300 px-3 py-2 text-sm" value={resetForm.user_id} onChange={(e) => setResetForm((prev) => ({ ...prev, user_id: e.target.value }))}>
-                <option value="">Chọn tài khoản reset mật khẩu</option>
+                <option value="">Chọn tài khoản đặt lại mật khẩu</option>
                 {adminUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name} - {roleLabel(item.role)}</option>)}
               </select>
               <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={resetForm.password} onChange={(e) => setResetForm((prev) => ({ ...prev, password: e.target.value }))} />
-              <button disabled={!resetForm.user_id || resetForm.password.length < 6} className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-400">Reset mật khẩu</button>
+              <button disabled={!resetForm.user_id || resetForm.password.length < 6} className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-400">Đặt lại mật khẩu</button>
             </form>
 
             <ModuleSearch
@@ -444,7 +444,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
               count={filteredAdminUsers.length}
               total={adminUsers.length}
             />
-            <DataTable headers={['Họ tên', 'Role', 'School', 'Active', 'Thao tác']}>
+            <DataTable headers={['Họ tên', 'Vai trò', 'Trường', 'Trạng thái', 'Thao tác']}>
               {filteredAdminUsers.map((item) => (
                 <tr key={item.id} className="border-b">
                   <td className="py-2">{item.full_name}</td>
@@ -475,7 +475,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
               count={filteredAuditLogs.length}
               total={auditLogs.length}
             />
-            <DataTable headers={['Thời gian', 'Người thao tác', 'Hành động', 'Target', 'School']}>
+            <DataTable headers={['Thời gian', 'Người thao tác', 'Hành động', 'Đối tượng', 'Trường']}>
               {filteredAuditLogs.map((log) => (
                 <tr key={log.id} className="border-b">
                   <td className="py-2">{new Date(log.created_at).toLocaleString('vi-VN')}</td>
@@ -486,7 +486,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
                 </tr>
               ))}
             </DataTable>
-            {filteredAuditLogs.length === 0 ? <EmptyState message="Chưa có audit log phù hợp với bộ lọc." /> : null}
+            {filteredAuditLogs.length === 0 ? <EmptyState message="Chưa có nhật ký kiểm toán phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
       </main>

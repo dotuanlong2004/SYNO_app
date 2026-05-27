@@ -182,3 +182,12 @@ Status: completed; committed and pushed in the current slice.
 - Keep red only for destructive/error states and orange only for warning states.
 - Normalize pushed dialog backgrounds to `AppTheme.lightGrayBackground`.
 - Verification: `flutter analyze`, `flutter test`, `git diff --check`.
+
+### Slice 20 - Admin Web Vietnamese UI Text Polish
+
+Status: completed; committed and pushed in the current slice.
+
+- Fix remaining visible Admin Web chat/announcement labels to Vietnamese with accents.
+- Fix Super Admin visible tab, status, reset-password, and audit labels to Vietnamese with accents.
+- Keep internal enum values and import aliases unchanged where they are data/API contracts.
+- Verification: `corepack pnpm --filter admin_web run typecheck`, `corepack pnpm --filter admin_web run build`, `corepack pnpm --filter super_admin_web run typecheck`, `corepack pnpm --filter super_admin_web run build`, `git diff --check`.

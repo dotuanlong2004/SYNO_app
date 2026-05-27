@@ -1205,7 +1205,7 @@ function AppShell({ authToken, authUser, onLogout }) {
             ['fees', 'Học phí & Thu phí'],
             ['announcements', 'Thông báo'],
             ['grades', 'Bảng điểm'],
-            ['chat', 'Tin nhan'],
+            ['chat', 'Tin nhắn'],
             ['attendance', 'Điểm danh'],
             ['device', 'Giả lập Quẹt thẻ'],
           ].map(([value, label]) => (
@@ -1922,7 +1922,7 @@ function AppShell({ authToken, authUser, onLogout }) {
                     setAnnouncementForm((prev) => ({ ...prev, send_notification: e.target.checked }))
                   }
                 />
-                Gui push toi phu huynh
+                Gửi push tới phụ huynh
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -2085,7 +2085,7 @@ function AppShell({ authToken, authUser, onLogout }) {
 
         {tab === 'chat' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Tin nhan phu huynh</h2>
+            <h2 className="mb-3 text-lg font-semibold">Tin nhắn phụ huynh</h2>
             <div className="mb-4 grid gap-2 md:grid-cols-[220px_1fr_auto]">
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
@@ -2096,7 +2096,7 @@ function AppShell({ authToken, authUser, onLogout }) {
                   loadChatMessages(studentCode);
                 }}
               >
-                <option value="">Tat ca hoc sinh</option>
+                <option value="">Tất cả học sinh</option>
                 {students.map((student) => (
                   <option key={student.id} value={student.student_code}>
                     {student.student_code} - {student.full_name}
@@ -2105,7 +2105,7 @@ function AppShell({ authToken, authUser, onLogout }) {
               </select>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Tim tin nhan..."
+                placeholder="Tìm tin nhắn..."
                 value={chatSearch}
                 onChange={(e) => setChatSearch(e.target.value)}
               />
@@ -2114,7 +2114,7 @@ function AppShell({ authToken, authUser, onLogout }) {
                 onClick={() => loadChatMessages(chatForm.student_code)}
                 className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
               >
-                Tai lai
+                Tải lại
               </button>
             </div>
             <form onSubmit={sendChatMessage} className="mb-4 grid gap-2 md:grid-cols-[220px_1fr_auto]">
@@ -2124,7 +2124,7 @@ function AppShell({ authToken, authUser, onLogout }) {
                 onChange={(e) => setChatForm((prev) => ({ ...prev, student_code: e.target.value }))}
                 required
               >
-                <option value="">Chon hoc sinh</option>
+                <option value="">Chọn học sinh</option>
                 {students.map((student) => (
                   <option key={student.id} value={student.student_code}>
                     {student.student_code} - {student.full_name}
@@ -2133,13 +2133,13 @@ function AppShell({ authToken, authUser, onLogout }) {
               </select>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Nhap noi dung tra loi"
+                placeholder="Nhập nội dung trả lời"
                 value={chatForm.message_text}
                 onChange={(e) => setChatForm((prev) => ({ ...prev, message_text: e.target.value }))}
                 required
               />
               <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
-                Gui
+                Gửi
               </button>
             </form>
             <div className="space-y-2">
@@ -2148,14 +2148,14 @@ function AppShell({ authToken, authUser, onLogout }) {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <strong>{item.student_code}</strong>
                     <span className="text-xs text-slate-500">
-                      {item.sender_role} - {item.sender_name || 'Unknown'} - {item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : ''}
+                      {item.sender_role} - {item.sender_name || 'Không rõ'} - {item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : ''}
                     </span>
                   </div>
                   <p className="mt-1 whitespace-pre-wrap text-slate-700">{item.message_text}</p>
                 </div>
               ))}
             </div>
-            {filteredChatMessages.length === 0 ? <EmptyState message="Chua co tin nhan phu hop voi bo loc." /> : null}
+            {filteredChatMessages.length === 0 ? <EmptyState message="Chưa có tin nhắn phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 
