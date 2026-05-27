@@ -130,7 +130,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
+                            labelText: 'Địa chỉ email',
                             hintText: 'Nhập email của bạn',
                             prefixIcon: Icon(Icons.alternate_email_rounded),
                           ),
@@ -182,7 +182,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                         ),

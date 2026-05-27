@@ -50,7 +50,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       const NavigationDestination(
         icon: Icon(Icons.calendar_month_outlined),
         selectedIcon: Icon(Icons.calendar_month_rounded),
-        label: 'TKB',
+        label: 'Lịch học',
       ),
       const NavigationDestination(
         icon: Icon(Icons.person_outline_rounded),
@@ -98,7 +98,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           DrawerHeader(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppTheme.primaryOrange, AppTheme.primaryOrangeDark],
+                colors: [AppTheme.primaryColor, AppTheme.deepBlue],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1174,7 +1174,7 @@ class _SessionHeader extends StatelessWidget {
             fontWeight: FontWeight.w700,
             fontSize: 12,
             color: color,
-            letterSpacing: 0.5,
+            letterSpacing: 0,
           ),
         ),
         const SizedBox(width: 8),
@@ -2548,12 +2548,12 @@ class _ProfileTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
-                  'PARENT',
+                  'PHỤ HUYNH',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
-                    letterSpacing: 1,
+                    letterSpacing: 0,
                   ),
                 ),
               ),

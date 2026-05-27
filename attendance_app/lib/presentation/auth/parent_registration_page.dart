@@ -143,12 +143,12 @@ class _ParentRegistrationPageState
                       TextFormField(
                         controller: _emailController,
                         decoration: const InputDecoration(
-                          labelText: 'Email/SĐT',
+                          labelText: 'Email hoặc số điện thoại',
                           prefixIcon: Icon(Icons.alternate_email_rounded),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Vui lòng nhập Email/SĐT';
+                            return 'Vui lòng nhập email hoặc số điện thoại';
                           }
                           return null;
                         },

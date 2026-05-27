@@ -4,7 +4,7 @@ class AppTheme {
   const AppTheme._();
 
   static const Color primaryColor = Color(0xFF0B2A6F);
-  static const Color deepBlue = Color(0xFF071E52);
+  static const Color deepBlue = Color(0xFF04122F);
   static const Color accentBlue = Color(0xFF1E88FF);
   static const Color accentOrange = Color(0xFFF59E0B);
   static const Color successColor = Color(0xFF22C55E);
@@ -14,9 +14,9 @@ class AppTheme {
   static const Color brandSurface = Color(0xFFEFF5FF);
 
   static const Color softWhite = Color(0xFFFFFFFF);
-  static const Color lightGrayBackground = Color(0xFFF6F8FC);
+  static const Color lightGrayBackground = Color(0xFFF1F5F9);
   static const Color mutedText = textSecondary;
-  static const Color primaryRed = deepBlue;
+  static const Color primaryRed = errorColor;
   static const Color primaryBlue = primaryColor;
   static const Color primaryOrange = primaryColor;
   static const Color primaryOrangeDark = deepBlue;
