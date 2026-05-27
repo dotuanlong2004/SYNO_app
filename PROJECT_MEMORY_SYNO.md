@@ -562,3 +562,18 @@ Kết quả mọi task phải nêu rõ:
   3. giu ti le, object-fit contain, khong crop, khong stretch;
   4. header/login phai co layout brand component rieng, canh baseline/spacing dung vai tro UI;
   5. neu can dung anh horizontal, chi dung trong khung co kich thuoc phu hop va khong cat mat logo/tagline.
+
+---
+
+## 24) Vietnamese text and UI priority directive (May 27, 2026)
+
+- User directive: tat ca text hien thi trong UI phai la tieng Viet co dau, khong de chu khong dau trong app/web.
+- Uu tien giao dien theo thu tu:
+  1. parent app (`attendance_app`) la uu tien quan trong nhat;
+  2. logo/brand/tong mau theo dung nhan dien SYNO la nen tang quan trong nhat;
+  3. sau khi app phu huynh dat chuan moi tiep tuc polish cac trang Admin Web va Super Admin Web.
+- Giao dien chuc nang phai lam dang hoang: dung component ro rang, spacing/on-screen text/empty state/error state co chat luong, khong chi gan logo/anh vao cho co.
+- Khi sua UI:
+  - uu tien tông xanh logo SYNO lam mau chu dao;
+  - dung mau phu co kiem soat cho trang thai/thong bao, khong lam lech brand;
+  - kiem tra text khong dau va sua thanh tieng Viet co dau truoc khi commit.
