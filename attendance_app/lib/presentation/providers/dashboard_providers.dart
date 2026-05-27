@@ -152,17 +152,17 @@ class AuthController extends Notifier<AuthState> {
   String _buildSignInErrorMessage(Object error) {
     if (error is DioException) {
       if (_isNetworkError(error)) {
-        return 'Cannot connect to server. Please start backend on ${ApiConfig.baseUrl} and try again.';
+        return 'Không thể kết nối máy chủ. Hãy kiểm tra backend tại ${ApiConfig.baseUrl} rồi thử lại.';
       }
       final statusCode = error.response?.statusCode;
       if (statusCode == 401) {
-        return 'Incorrect email or password.';
+        return 'Email hoặc mật khẩu không đúng.';
       }
       if (statusCode != null) {
-        return 'Sign in failed (HTTP $statusCode).';
+        return 'Đăng nhập thất bại (HTTP $statusCode).';
       }
     }
-    return 'Sign in failed. Please try again.';
+    return 'Đăng nhập thất bại. Vui lòng thử lại.';
   }
 
   Future<void> signOut() async {

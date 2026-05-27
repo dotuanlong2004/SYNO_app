@@ -220,3 +220,11 @@ Status: completed; commit pending in the current slice.
 - Show total tracked amount, paid amount, pending amount, and paid/total count.
 - Keep this module data-driven from existing fee APIs without adding new schema.
 - Verification: `flutter analyze`, `flutter test`, `git diff --check`.
+
+### Slice 24 - Parent Login Error Localization
+
+Status: completed; commit pending in the current slice.
+
+- Replace remaining parent app sign-in error strings with Vietnamese text with accents.
+- Keep user-facing auth errors aligned with the global UI text rule.
+- Verification: `flutter analyze`, `git diff --check`.
