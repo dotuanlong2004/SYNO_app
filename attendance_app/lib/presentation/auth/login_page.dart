@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/brand_logo.dart';
 
@@ -38,7 +39,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (!mounted) return;
 
     if (success) {
-      final role = (ref.read(authControllerProvider).user?.role ?? '').toLowerCase();
+      final role = (ref.read(authControllerProvider).user?.role ?? '')
+          .toLowerCase();
       if (role == 'admin' || role == 'teacher') {
         await ref.read(authControllerProvider.notifier).signOut();
         if (mounted) {
@@ -54,8 +56,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         }
       }
     } else {
-      final message = ref.read(authControllerProvider).message ?? 'Đăng nhập thất bại';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      final message =
+          ref.read(authControllerProvider).message ?? 'Đăng nhập thất bại';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
 
     if (mounted) setState(() => _submitting = false);
@@ -70,9 +75,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFFC62828).withValues(alpha: 0.05), // Đỏ nhạt
+              AppTheme.brandSurface,
               Colors.white,
-              const Color(0xFF1565C0).withValues(alpha: 0.05), // Xanh nhạt
+              AppTheme.primaryColor.withValues(alpha: 0.08),
             ],
           ),
         ),
@@ -81,32 +86,44 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             padding: const EdgeInsets.all(20),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
-              child: Card(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFD8E2F4)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x140B2A6F),
+                      blurRadius: 28,
+                      offset: Offset(0, 16),
+                    ),
+                  ],
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        const BrandLogo(size: 120),
+                        const Center(child: BrandLogo.horizontal(width: 240)),
                         const SizedBox(height: 24),
                         Text(
                           'Đăng nhập hệ thống',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF1A1F2E),
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           'Nền tảng trường học thông minh dành cho phụ huynh',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[600],
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppTheme.textSecondary),
                         ),
                         const SizedBox(height: 20),
                         TextFormField(
@@ -144,11 +161,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ElevatedButton(
                           onPressed: _submitting ? null : _submit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E88FF),
+                            backgroundColor: AppTheme.primaryColor,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
                           child: _submitting

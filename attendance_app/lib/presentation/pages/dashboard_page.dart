@@ -2063,7 +2063,7 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
               if (messages.isEmpty) {
                 return const _EmptyState(
                   icon: Icons.forum_rounded,
-                  message: 'Chua co tin nhan',
+                  message: 'Chưa có tin nhắn',
                 );
               }
               return RefreshIndicator(
@@ -2083,7 +2083,7 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
               );
             },
             error: (e, _) =>
-                const _ErrorState(message: 'Khong the tai tin nhan'),
+                const _ErrorState(message: 'Không thể tải tin nhắn'),
             loading: () => const Center(
               child: CircularProgressIndicator(color: AppTheme.primaryOrange),
             ),
@@ -2113,9 +2113,9 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
-                      hintText: 'Nhap tin nhan cho nha truong',
+                      hintText: 'Nhập tin nhắn cho nhà trường',
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: AppTheme.brandSurface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
@@ -2158,7 +2158,7 @@ class _ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isParent = message.senderRole.toLowerCase() == 'parent';
-    final bubbleColor = isParent ? AppTheme.primaryOrange : Colors.white;
+    final bubbleColor = isParent ? AppTheme.primaryColor : Colors.white;
     final textColor = isParent ? Colors.white : const Color(0xFF1B2435);
 
     return Align(

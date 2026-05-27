@@ -16,8 +16,8 @@ class LocalNotificationService {
   static const AndroidNotificationChannel _androidChannel =
       AndroidNotificationChannel(
         'syno_channel',
-        'SYNO Notifications',
-        description: 'Realtime SYNO school notifications',
+        'Thông báo SYNO',
+        description: 'Thông báo thời gian thực từ SYNO',
         importance: Importance.max,
       );
 
@@ -27,7 +27,7 @@ class LocalNotificationService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
     const windows = WindowsInitializationSettings(
-      appName: 'Attendance App',
+      appName: 'SYNO',
       appUserModelId: 'Com.AttendanceApp.Attendance',
       guid: 'a8f5c3d2-1b4e-4f6a-9c0d-ef1234567890',
     );
@@ -74,8 +74,8 @@ class LocalNotificationService {
 
     const androidDetails = AndroidNotificationDetails(
       'syno_channel',
-      'SYNO Notifications',
-      channelDescription: 'Realtime SYNO school notifications',
+      'Thông báo SYNO',
+      channelDescription: 'Thông báo thời gian thực từ SYNO',
       importance: Importance.max,
       priority: Priority.high,
     );

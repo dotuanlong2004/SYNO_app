@@ -162,3 +162,13 @@ Status: completed; committed and pushed in the current slice.
 - Support chat and announcement fallback titles/bodies in addition to attendance.
 - Keep the previous attendance notification wrapper as a compatibility alias.
 - Verification: `flutter test`, `flutter analyze`, `git diff --check`.
+
+### Slice 18 - Parent App Brand UI Baseline
+
+Status: completed; committed and pushed in the current slice.
+
+- Rebase the parent app theme on the SYNO logo blue as the primary brand color.
+- Polish login surface with a proper brand component, controlled spacing, border, and shadow.
+- Convert chat UI copy and chat error messages to Vietnamese with accents.
+- Keep notification channel/app title under the SYNO brand.
+- Verification: `flutter analyze`, `flutter test`, `git diff --check`.

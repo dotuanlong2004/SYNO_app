@@ -36,16 +36,16 @@ class ParentFeaturesRemoteDataSource {
           .toList();
     } on DioException catch (e) {
       final serverMsg = e.response?.data?['error']?.toString();
-      throw Exception(serverMsg ?? 'Khong the tai tin nhan (${e.type.name})');
+      throw Exception(serverMsg ?? 'Không thể tải tin nhắn (${e.type.name})');
     } catch (e) {
-      throw Exception('Loi khi tai tin nhan: $e');
+      throw Exception('Lỗi khi tải tin nhắn: $e');
     }
   }
 
   Future<ChatMessage> sendChatMessage(String messageText) async {
     final text = messageText.trim();
     if (text.isEmpty) {
-      throw Exception('Noi dung tin nhan khong duoc de trong');
+      throw Exception('Nội dung tin nhắn không được để trống');
     }
 
     try {
@@ -56,14 +56,14 @@ class ParentFeaturesRemoteDataSource {
       );
       final row = response.data?['data'];
       if (row is! Map<String, dynamic>) {
-        throw Exception('Phan hoi gui tin nhan khong hop le');
+        throw Exception('Phản hồi gửi tin nhắn không hợp lệ');
       }
       return _parseChatMessage(row);
     } on DioException catch (e) {
       final serverMsg = e.response?.data?['error']?.toString();
-      throw Exception(serverMsg ?? 'Khong the gui tin nhan (${e.type.name})');
+      throw Exception(serverMsg ?? 'Không thể gửi tin nhắn (${e.type.name})');
     } catch (e) {
-      throw Exception('Loi khi gui tin nhan: $e');
+      throw Exception('Lỗi khi gửi tin nhắn: $e');
     }
   }
 
