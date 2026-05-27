@@ -153,3 +153,12 @@ Status: completed; committed and pushed in the current slice.
 - Scope parent token lookup by `student.parent_id`, `school_id`, and parent role.
 - Add contract coverage for parent-facing chat push payloads.
 - Verification: `corepack pnpm --filter backend test`, `corepack pnpm --filter backend build`, `git diff --check`.
+
+### Slice 17 - Parent Notification Copy Routing
+
+Status: completed; committed and pushed in the current slice.
+
+- Make parent app foreground local notifications resolve fallback copy by FCM `data.type`.
+- Support chat and announcement fallback titles/bodies in addition to attendance.
+- Keep the previous attendance notification wrapper as a compatibility alias.
+- Verification: `flutter test`, `flutter analyze`, `git diff --check`.

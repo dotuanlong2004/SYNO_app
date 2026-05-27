@@ -47,11 +47,13 @@ class FcmService {
       });
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-        await LocalNotificationService.showAttendanceNotification(message);
+        await LocalNotificationService.showRemoteNotification(message);
         await _onAttendanceMessage?.call();
       });
 
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+      FirebaseMessaging.onMessageOpenedApp.listen((
+        RemoteMessage message,
+      ) async {
         await _onAttendanceMessage?.call();
       });
 

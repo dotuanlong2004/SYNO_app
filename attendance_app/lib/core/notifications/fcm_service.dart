@@ -77,7 +77,7 @@ class FCMService {
     }
 
     // Hiển thị local notification
-    await LocalNotificationService.showAttendanceNotification(message);
+    await LocalNotificationService.showRemoteNotification(message);
   }
 
   /// Gửi token lên backend để lưu
@@ -87,14 +87,14 @@ class FCMService {
       // Lấy token từ storage
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString('auth_token');
-      
+
       if (authToken == null) {
         if (kDebugMode) {
           print('❌ Không có auth token, không thể gửi FCM token');
         }
         return;
       }
-      
+
       // Gọi API để lưu FCM token
       final response = await http.post(
         Uri.parse('http://localhost:3000/api/v1/users/fcm-token'),
@@ -104,7 +104,7 @@ class FCMService {
         },
         body: json.encode({'fcm_token': token}),
       );
-      
+
       if (response.statusCode == 200) {
         if (kDebugMode) {
           print('✅ FCM token đã gửi lên backend thành công');

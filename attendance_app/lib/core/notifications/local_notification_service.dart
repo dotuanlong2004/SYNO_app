@@ -1,6 +1,13 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+class NotificationDisplayText {
+  const NotificationDisplayText({required this.title, required this.body});
+
+  final String title;
+  final String body;
+}
+
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -8,9 +15,9 @@ class LocalNotificationService {
 
   static const AndroidNotificationChannel _androidChannel =
       AndroidNotificationChannel(
-        'attendance_channel',
-        'Attendance Notifications',
-        description: 'Realtime attendance notifications',
+        'syno_channel',
+        'SYNO Notifications',
+        description: 'Realtime SYNO school notifications',
         importance: Importance.max,
       );
 
@@ -41,13 +48,34 @@ class LocalNotificationService {
     _initialized = true;
   }
 
-  static Future<void> showAttendanceNotification(RemoteMessage message) async {
+  static NotificationDisplayText resolveDisplayText(Map<String, dynamic> data) {
+    final type = '${data['type'] ?? ''}'.toLowerCase();
+    switch (type) {
+      case 'chat_message':
+        return const NotificationDisplayText(
+          title: 'Tin nhắn mới từ SYNO',
+          body: 'Bạn có phản hồi mới từ nhà trường.',
+        );
+      case 'announcement':
+        return const NotificationDisplayText(
+          title: 'Thông báo mới từ SYNO',
+          body: 'Nhà trường vừa gửi thông báo mới.',
+        );
+      default:
+        return const NotificationDisplayText(
+          title: 'Thông báo điểm danh',
+          body: 'Có cập nhật điểm danh mới.',
+        );
+    }
+  }
+
+  static Future<void> showRemoteNotification(RemoteMessage message) async {
     await initialize();
 
     const androidDetails = AndroidNotificationDetails(
-      'attendance_channel',
-      'Attendance Notifications',
-      channelDescription: 'Realtime attendance notifications',
+      'syno_channel',
+      'SYNO Notifications',
+      channelDescription: 'Realtime SYNO school notifications',
       importance: Importance.max,
       priority: Priority.high,
     );
@@ -59,8 +87,9 @@ class LocalNotificationService {
       windows: WindowsNotificationDetails(),
     );
 
-    final title = message.notification?.title ?? 'Thong bao diem danh';
-    final body = message.notification?.body ?? 'Co cap nhat diem danh moi.';
+    final fallback = resolveDisplayText(message.data);
+    final title = message.notification?.title ?? fallback.title;
+    final body = message.notification?.body ?? fallback.body;
 
     await _plugin.show(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -68,5 +97,9 @@ class LocalNotificationService {
       body: body,
       notificationDetails: details,
     );
+  }
+
+  static Future<void> showAttendanceNotification(RemoteMessage message) {
+    return showRemoteNotification(message);
   }
 }
