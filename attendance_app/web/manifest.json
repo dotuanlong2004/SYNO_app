@@ -1,11 +1,11 @@
 {
-    "name": "attendance_app",
-    "short_name": "attendance_app",
+    "name": "SYNO",
+    "short_name": "SYNO",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#04122F",
+    "theme_color": "#04122F",
+    "description": "SYNO - Nền tảng Quản lý Trường học Thông minh",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
