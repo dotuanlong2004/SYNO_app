@@ -2483,6 +2483,63 @@ class _ProfileTab extends ConsumerWidget {
     );
   }
 
+  void _showSchoolInfo(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Center(child: BrandLogo.horizontal(width: 220)),
+              const SizedBox(height: 20),
+              const Text(
+                'Thông tin nhà trường',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'SYNO đang kết nối dữ liệu điểm danh, lịch học, học phí và thông báo giữa nhà trường với phụ huynh.',
+                style: TextStyle(color: Colors.grey.shade700, height: 1.45),
+              ),
+              const SizedBox(height: 16),
+              _InfoRow(
+                icon: Icons.verified_user_rounded,
+                title: 'Dữ liệu theo trường',
+                subtitle:
+                    'Thông tin của phụ huynh và học sinh được tách theo trường.',
+              ),
+              const SizedBox(height: 10),
+              _InfoRow(
+                icon: Icons.support_agent_rounded,
+                title: 'Cần hỗ trợ?',
+                subtitle:
+                    'Liên hệ văn phòng nhà trường để cập nhật thông tin tài khoản.',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).user;
@@ -2656,7 +2713,7 @@ class _ProfileTab extends ConsumerWidget {
                     Icons.chevron_right_rounded,
                     color: Colors.grey,
                   ),
-                  onTap: () {},
+                  onTap: () => _showSchoolInfo(context),
                 ),
               ],
             ),
@@ -2746,6 +2803,60 @@ class _ProfileTab extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 32),
+      ],
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppTheme.brandSurface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: AppTheme.primaryColor, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

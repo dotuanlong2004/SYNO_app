@@ -283,7 +283,16 @@ final timetableRepositoryProvider = Provider<TimetableRepository>((ref) {
   return TimetableRepositoryImpl(dataSource);
 });
 
+final parentLearningDataRefreshTickProvider =
+    StreamProvider.autoDispose<DateTime>((ref) {
+      return Stream<DateTime>.periodic(
+        const Duration(seconds: 3),
+        (_) => DateTime.now(),
+      );
+    });
+
 final timetableProvider = FutureProvider<List<TimetableEntry>>((ref) async {
+  ref.watch(parentLearningDataRefreshTickProvider);
   final repository = ref.watch(timetableRepositoryProvider);
   return repository.fetchTimetable();
 });
@@ -294,6 +303,7 @@ final feesDataSourceProvider = Provider<FeesRemoteDataSource>((ref) {
 });
 
 final feeNoticesProvider = FutureProvider<List<FeeNotice>>((ref) async {
+  ref.watch(parentLearningDataRefreshTickProvider);
   final dataSource = ref.watch(feesDataSourceProvider);
   return dataSource.fetchFeeNotices();
 });
@@ -307,6 +317,7 @@ final parentFeaturesDataSourceProvider =
 final announcementsProvider = FutureProvider<List<AnnouncementItem>>((
   ref,
 ) async {
+  ref.watch(parentLearningDataRefreshTickProvider);
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchAnnouncements();
 });
@@ -317,6 +328,7 @@ final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
 });
 
 final gradesProvider = FutureProvider<List<GradeRecord>>((ref) async {
+  ref.watch(parentLearningDataRefreshTickProvider);
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchGrades();
 });

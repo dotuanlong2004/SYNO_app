@@ -1,6 +1,7 @@
 'use strict';
 
 const { getSupabase } = require('../config/supabase');
+const { resolveMobileUserContext } = require('../services/mobileUserContext');
 
 function debugLog(runId, hypothesisId, location, message, data) {
   // #region agent log
@@ -58,36 +59,12 @@ async function mobileAuth(req, res, next) {
       userIdPresent: !!user?.id,
     });
 
-    let resolvedRole = profile?.role || user.user_metadata?.role || 'parent';
-    let resolvedClassId = profile?.class_id || null;
-    let resolvedStudentCode = profile?.student_code || user.user_metadata?.student_code || null;
-    const resolvedSchoolId =
-      profile?.school_id || user.user_metadata?.school_id || '1';
-
-    if (resolvedRole === 'parent' && (!resolvedClassId || !resolvedStudentCode)) {
-      const { data: linkedStudent, error: linkedError } = await supabase
-        .from('students')
-        .select('student_code, class_name')
-        .eq('parent_id', user.id)
-        .eq('school_id', resolvedSchoolId)
-        .order('id', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (!linkedError && linkedStudent) {
-        resolvedStudentCode = resolvedStudentCode || linkedStudent.student_code || null;
-        resolvedClassId = resolvedClassId || linkedStudent.class_name || null;
-      } else if (resolvedStudentCode && !resolvedClassId) {
-        const { data: byCode } = await supabase
-          .from('students')
-          .select('class_name')
-          .eq('student_code', resolvedStudentCode)
-          .eq('school_id', resolvedSchoolId)
-          .limit(1)
-          .maybeSingle();
-        resolvedClassId = byCode?.class_name || null;
-      }
-    }
+    const resolved = await resolveMobileUserContext({
+      supabase,
+      userId: user.id,
+      profile,
+      userMetadata: user.user_metadata || {},
+    });
 
     if (profile && profile.is_active === false) {
       return res.status(403).json({ ok: false, error: 'Forbidden', message: 'User account is inactive' });
@@ -96,11 +73,11 @@ async function mobileAuth(req, res, next) {
     req.user = {
       id: user.id,
       email: user.email,
-      role: resolvedRole,
-      full_name: profile?.full_name || user.user_metadata?.full_name || '',
-      class_id: resolvedClassId,
-      student_code: resolvedStudentCode,
-      school_id: resolvedSchoolId,
+      role: resolved.role,
+      full_name: resolved.full_name,
+      class_id: resolved.class_id,
+      student_code: resolved.student_code,
+      school_id: resolved.school_id,
     };
     return next();
   } catch (err) {
