@@ -103,7 +103,7 @@ D:\Sdk\platform-tools\adb.exe devices
 
 ## 5. Emulator Đang Dùng
 
-AVD ổn định nhất hiện tại:
+AVD duy nhất còn giữ lại hiện tại:
 
 ```text
 Pixel_10_Pro_XL
@@ -130,8 +130,9 @@ exit 1
 
 Lưu ý emulator:
 
-- `Pixel8_API_35` hiện không boot được vì SDK thiếu system image Android 34.
-- `SYNO_Light_API_37` đã thử tạo thủ công nhưng bị lỗi display/splash, không dùng để kiểm tra app.
+- Đã gỡ các AVD thừa/lỗi (`Pixel8`, `Pixel8_API_35`, `SYNO_Light_API_37`) để máy nhẹ hơn.
+- Chỉ dùng `Pixel_10_Pro_XL`.
+- Không tự tạo AVD mới nếu user chưa yêu cầu.
 - `Pixel_10_Pro_XL` có thể hiện ANR `com.android.systemui` lúc mới boot. Bấm `Wait` hoặc dùng phím/tap để dismiss rồi chờ thêm.
 
 ## 6. Build Parent App

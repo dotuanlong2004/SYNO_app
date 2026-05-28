@@ -300,31 +300,25 @@ Luồng sync:
 7. Ghi sync log.
 8. App nhận dữ liệu qua API SYNO như bình thường.
 
-## 9. Nhiệm Vụ Còn Lại - Lát Cắt 6: Emulator Mượt Hơn
+## 9. Emulator Rule
 
-Hiện trạng:
+Hiện trạng đã dọn:
 
-- `Pixel_10_Pro_XL` chạy được nhưng nặng và hay ANR lúc mới boot.
-- `Pixel8_API_35` thiếu system image Android 34 nên không boot.
-- `SYNO_Light_API_37` tự tạo thủ công bị lỗi display/splash, không dùng.
+- Chỉ giữ lại `Pixel_10_Pro_XL`.
+- Đã gỡ các AVD thừa/lỗi: `Pixel8`, `Pixel8_API_35`, `SYNO_Light_API_37`.
+- Không tự tạo emulator mới vì dễ làm nặng máy và phát sinh lỗi vặt.
 
-Việc nên làm bằng Android Studio Device Manager:
-
-1. Mở Android Studio.
-2. Device Manager.
-3. Tạo AVD mới:
-   - Device: Pixel 5 hoặc Pixel 6a.
-   - API: dùng system image đã cài hợp lệ hoặc tải API 35/36 ổn định.
-   - RAM 2048 MB.
-   - Resolution thấp hơn Pixel_10_Pro_XL.
-   - Graphics: Hardware.
-4. Đặt tên:
+AI/Gemini phải dùng đúng emulator này:
 
 ```text
-SYNO_Pixel5_API_35
+Pixel_10_Pro_XL
 ```
 
-Sau đó cập nhật runbook nếu AVD mới chạy ổn.
+Lệnh mở nằm trong:
+
+```text
+docs/reports/RUNBOOK_2026-05-28_LOCAL_STARTUP.md
+```
 
 ## 10. Commit/Push Rule
 
