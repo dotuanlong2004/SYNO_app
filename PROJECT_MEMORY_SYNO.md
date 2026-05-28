@@ -623,3 +623,33 @@ Kết quả mọi task phải nêu rõ:
   3. verification output;
   4. files intentionally left for Codex review;
   5. confirmation that no forbidden hardware/FCM files were modified.
+
+---
+
+## 27) Codex handoff for next session (May 28, 2026)
+
+- Codex created a concrete next-session handoff at:
+
+```text
+docs/reports/HANDOFF_2026-05-28_CODEX_SESSION.md
+```
+
+- The handoff records:
+  1. pushed branding/native identity commits for the Parent App;
+  2. pushed Parent App UI/text polish commit;
+  3. Android emulator install/build/launch commands;
+  4. backend, Admin Web, and Super Admin Web startup commands;
+  5. current uncommitted dashboard polish in `attendance_app/lib/presentation/pages/dashboard_page.dart`;
+  6. the rule that Codex owns hardware collector and Firebase push work.
+- Current pushed commits from the latest Codex slice:
+
+```text
+5f011df2 feat: brand parent app native identity
+be7001aa feat: polish parent app brand text
+```
+
+- Before new feature work, check `git status --short`. At handoff time, the only known dirty source file is:
+
+```text
+attendance_app/lib/presentation/pages/dashboard_page.dart
+```
