@@ -64,11 +64,17 @@ function LoginScreen({ onLogin }) {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: '#f1f5f9',
+      justifyContent: 'center',
+      background: 'radial-gradient(circle at 20% 0%, rgba(30, 136, 255, 0.18), transparent 28rem), linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%)',
+      padding: '1rem',
     }}>
       <div style={{
-        background: '#fff', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
-        padding: '2.5rem 2rem', width: 380, maxWidth: '95vw',
+        background: 'rgba(255,255,255,0.9)', borderRadius: 22,
+        boxShadow: '0 24px 70px rgba(15,23,42,0.14)',
+        border: '1px solid rgba(148,163,184,0.26)',
+        backdropFilter: 'blur(18px)',
+        padding: '2.5rem 2rem', width: 400, maxWidth: '95vw',
+        animation: 'syno-page-rise 360ms ease-out both',
       }}>
         <div style={{ marginBottom: '1.5rem' }}>
           <BrandIdentity />

@@ -23,13 +23,15 @@ class BrandLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final markSize = markOnly ? width : width * 0.24;
-    final logoMark = Image.asset(
-      'assets/brand/syno-logo-mark.png',
-      width: markSize,
-      height: height ?? markSize,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      semanticLabel: markOnly ? 'SYNO' : null,
+    final logoMark = RepaintBoundary(
+      child: Image.asset(
+        'assets/brand/syno-logo-mark.png',
+        width: markSize,
+        height: height ?? markSize,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: markOnly ? 'SYNO' : null,
+      ),
     );
 
     if (markOnly) return logoMark;

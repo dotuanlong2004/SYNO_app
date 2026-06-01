@@ -87,7 +87,25 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       ),
       endDrawer: _buildEndDrawer(context),
       body: SafeArea(
-        child: IndexedStack(index: selectedIndex, children: pages),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final slide = Tween<Offset>(
+              begin: const Offset(0.025, 0),
+              end: Offset.zero,
+            ).animate(animation);
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(position: slide, child: child),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey<int>(selectedIndex),
+            child: pages[selectedIndex],
+          ),
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
@@ -1798,10 +1816,7 @@ class _NewsTab extends ConsumerWidget {
     return announcementsAsync.when(
       data: (items) {
         if (items.isEmpty) {
-          return _EmptyState(
-            icon: _feedIcon,
-            message: _emptyMessage,
-          );
+          return _EmptyState(icon: _feedIcon, message: _emptyMessage);
         }
         return RefreshIndicator(
           onRefresh: () async {
