@@ -9,6 +9,7 @@ const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
 const { initializeFirebaseAdmin } = require('../config/firebaseAdmin');
 const { saveUserFcmToken, validateFcmToken } = require('../services/userNotificationTokens');
+const { eventBus } = require('../services/eventBus');
 
 const router = express.Router();
 
@@ -253,6 +254,49 @@ router.get('/announcements', mobileAuth, async (req, res) => {
     console.error('Failed to fetch mobile announcements', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
+});
+
+router.get('/events', mobileAuth, async (req, res) => {
+  const schoolId = String(req.user?.school_id ?? '1');
+  try {
+    const { data, error } = await getSupabase()
+      .from('school_events')
+      .select('id, title, content, image_url, event_date, published_at')
+      .eq('school_id', schoolId)
+      .order('published_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return res.status(200).json({ ok: true, count: data.length, data });
+  } catch (error) {
+    console.error('Failed to fetch mobile events', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
+// SSE Endpoint
+router.get('/sync', mobileAuth, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // CORS for SSE (nếu app test từ localhost/flutter web)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  // Gửi sự kiện mở kết nối thành công để client biết
+  res.write(`data: ${JSON.stringify({ ok: true, msg: 'connected' })}\n\n`);
+
+  const schoolId = String(req.user?.school_id ?? '1');
+  const eventName = `sync:${schoolId}`;
+
+  const listener = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  eventBus.on(eventName, listener);
+
+  req.on('close', () => {
+    eventBus.removeListener(eventName, listener);
+  });
 });
 
 router.get('/grades', mobileAuth, async (req, res) => {

@@ -21,10 +21,50 @@ const {
 } = require('../services/adminWebChatMessages');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { buildGradePayload } = require('../services/adminWebGrades');
+const { buildEventPayload, buildEventUpdatePayload } = require('../services/adminWebEvents');
 const { buildStudentBulkPayload, buildStudentPayload } = require('../services/adminWebStudents');
 const { buildTimetablePayload } = require('../services/adminWebTimetables');
+const { emitSyncEvent } = require('../services/eventBus');
+const { adminWebApiKeyRouter } = require('./adminWebApiKey');
 
 const router = express.Router();
+
+// Middleware tự động emit sự kiện sync cho client khi admin thay đổi dữ liệu thành công
+function autoSyncEmitterMiddleware(req, res, next) {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    const originalJson = res.json;
+    res.json = function (body) {
+      const result = originalJson.call(this, body);
+      const isSuccess = (res.statusCode >= 200 && res.statusCode < 300) || (body && body.ok);
+      if (isSuccess && req.schoolId) {
+        const url = req.originalUrl || (req.baseUrl + req.path);
+        let dataType = null;
+        if (url.includes('/timetables')) dataType = 'timetable';
+        else if (url.includes('/fees')) dataType = 'fee';
+        else if (url.includes('/grades')) dataType = 'grade';
+        else if (url.includes('/announcements')) dataType = 'announcement';
+        else if (url.includes('/events')) dataType = 'event';
+        else if (url.includes('/chat')) dataType = 'chat';
+        else if (url.includes('/students')) dataType = 'student';
+
+        if (dataType) {
+          let action = 'update';
+          if (req.method === 'POST') {
+            action = url.includes('/bulk') ? 'bulk_create' : 'create';
+          } else if (req.method === 'DELETE') {
+            action = 'delete';
+          }
+          
+          process.nextTick(() => {
+            emitSyncEvent(req.schoolId, dataType, action);
+          });
+        }
+      }
+      return result;
+    };
+  }
+  next();
+}
 
 function requireAdminWebRole(req, res, next) {
   const role = String(req.user?.role || '').toLowerCase();
@@ -50,7 +90,10 @@ function setSchoolId(req, res, next) {
   return next();
 }
 
-router.use(mobileAuth, requireAdminWebRole, setSchoolId);
+router.use(mobileAuth, requireAdminWebRole, setSchoolId, autoSyncEmitterMiddleware);
+
+// API Key & Data Sync Integration
+router.use('/api-key', adminWebApiKeyRouter(getSupabase()));
 
 // GET /admin-web/students
 router.get('/students', async (req, res) => {
@@ -125,6 +168,85 @@ router.get('/grades', async (req, res) => {
     return res.status(500).json({ ok: false, error: error.message });
   }
   return res.json({ ok: true, data });
+});
+
+// GET /admin-web/events
+router.get('/events', async (req, res) => {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('school_events')
+    .select('*')
+    .eq('school_id', req.schoolId)
+    .order('published_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.json({ ok: true, data });
+});
+
+// POST /admin-web/events
+router.post('/events', async (req, res) => {
+  const supabase = getSupabase();
+  let payload;
+  try {
+    payload = buildEventPayload({
+      input: req.body,
+      schoolId: req.schoolId,
+      userId: req.user?.id,
+    });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message });
+  }
+
+  const { data, error } = await supabase
+    .from('school_events')
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.status(201).json({ ok: true, data });
+});
+
+// PUT /admin-web/events/:id
+router.put('/events/:id', async (req, res) => {
+  const supabase = getSupabase();
+  const payload = buildEventUpdatePayload(req.body);
+  
+  if (Object.keys(payload).length === 0) {
+    return res.status(400).json({ ok: false, error: 'No valid fields provided for update' });
+  }
+
+  const { data, error } = await supabase
+    .from('school_events')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', req.params.id)
+    .eq('school_id', req.schoolId)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.json({ ok: true, data });
+});
+
+// DELETE /admin-web/events/:id
+router.delete('/events/:id', async (req, res) => {
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('school_events')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('school_id', req.schoolId);
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.json({ ok: true });
 });
 
 // GET /admin-web/attendance-logs

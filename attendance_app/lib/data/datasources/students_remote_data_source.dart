@@ -9,21 +9,25 @@ class StudentsRemoteDataSource {
   final Dio _dio;
 
   Future<List<StudentLinkInfoModel>> fetchStudents() async {
-    final response = await _dio.get<Map<String, dynamic>>('/api/v1/students');
-    final data = response.data;
-    if (data == null) {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>('/api/v1/students');
+      final data = response.data;
+      if (data == null) {
+        return const <StudentLinkInfoModel>[];
+      }
+
+      final rows = data['data'];
+      if (rows is! List) {
+        return const <StudentLinkInfoModel>[];
+      }
+
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(StudentLinkInfoModel.fromJson)
+          .toList();
+    } on DioException {
       return const <StudentLinkInfoModel>[];
     }
-
-    final rows = data['data'];
-    if (rows is! List) {
-      return const <StudentLinkInfoModel>[];
-    }
-
-    return rows
-        .whereType<Map<String, dynamic>>()
-        .map(StudentLinkInfoModel.fromJson)
-        .toList();
   }
 
   Future<ProvisionParentResult> provisionParent({

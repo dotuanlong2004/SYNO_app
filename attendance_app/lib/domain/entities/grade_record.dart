@@ -12,4 +12,6 @@ class GradeRecord {
   final String subjectName;
   final double midtermScore;
   final double finalScore;
+
+  double get averageScore => (midtermScore + finalScore) / 2;
 }

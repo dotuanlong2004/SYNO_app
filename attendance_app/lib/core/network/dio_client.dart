@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import 'auth_interceptor.dart';
+import 'error_interceptor.dart';
 
 Dio buildDioClient({
   required String baseUrl,
@@ -25,7 +26,7 @@ Dio buildDioClient({
     ),
   );
 
-  dio.interceptors.add(
+  dio.interceptors.addAll([
     AuthInterceptor(
       getAccessToken: getAccessToken,
       getRefreshToken: getRefreshToken,
@@ -33,7 +34,8 @@ Dio buildDioClient({
       onUnauthorized: onUnauthorized,
       refreshTokens: refreshTokens,
     ),
-  );
+    ErrorInterceptor(),
+  ]);
 
   return dio;
 }

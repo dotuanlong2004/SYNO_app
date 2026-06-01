@@ -5,6 +5,7 @@ class AnnouncementItem {
     required this.content,
     required this.priority,
     required this.publishedAt,
+    this.imageUrl,
   });
 
   final int id;
@@ -12,4 +13,5 @@ class AnnouncementItem {
   final String content;
   final String priority;
   final DateTime? publishedAt;
+  final String? imageUrl;
 }

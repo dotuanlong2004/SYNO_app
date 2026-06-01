@@ -11,7 +11,7 @@ import {
   roleLabel,
 } from './adminUi';
 import synoLogoMark from './assets/brand/syno-logo-mark.png';
-
+import { supabase } from './supabaseClient';
 // Use Vite environment variables (VITE_ prefix required)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
 const HEALTH_API = API_BASE.replace(/\/api\/v1\/?$/, '/health');
@@ -222,8 +222,18 @@ function AppShell({ authToken, authUser, onLogout }) {
     content: '',
     priority: 'normal',
     is_general: true,
+    class_id: '',
     send_notification: false,
   });
+  const [events, setEvents] = useState([]);
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    content: '',
+    event_date: '',
+    image_url: '',
+    published_at: '',
+  });
+  const [editingEventId, setEditingEventId] = useState(null);
   const [grades, setGrades] = useState([]);
   const [gradeForm, setGradeForm] = useState({
     student_code: '',
@@ -248,6 +258,7 @@ function AppShell({ authToken, authUser, onLogout }) {
   const [timetableSearch, setTimetableSearch] = useState('');
   const [feeSearch, setFeeSearch] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
+  const [eventSearch, setEventSearch] = useState('');
   const [gradeSearch, setGradeSearch] = useState('');
   const [chatSearch, setChatSearch] = useState('');
 
@@ -288,31 +299,52 @@ function AppShell({ authToken, authUser, onLogout }) {
     setLoading(true);
     setMessage('');
     
-    Promise.all([
-      requestJson(`${ADMIN_WEB_API}/students`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/timetables`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/fees`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/announcements`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/chat/messages`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
-    ])
-      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson, chatJson, attendanceJson]) => {
+    const fetchData = async () => {
+      try {
+        const [studentsJson, timetablesJson, feesJson, announcementsJson, eventsJson, gradesJson, chatJson, attendanceJson] = await Promise.all([
+          requestJson(`${ADMIN_WEB_API}/students`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/timetables`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/fees`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/announcements`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/events`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/chat/messages`, { headers: adminHeaders }),
+          requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
+        ]);
         setStudents(studentsJson.data || []);
         setTimetables(timetablesJson.data || []);
         setFees(feesJson.data || []);
         setAnnouncements(announcementsJson.data || []);
+        setEvents(eventsJson.data || []);
         setGrades(gradesJson.data || []);
         setChatMessages(chatJson.data || []);
         setAttendanceLogs(attendanceJson.data || []);
         loadSystemHealth().catch(() => {});
-      })
-      .catch((error) => {
+      } catch (error) {
         setMessage(error.message);
-      })
-      .finally(() => {
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
+
+    // Supabase Realtime for attendance_logs
+    const attendanceChannel = supabase
+      .channel('attendance_logs_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_logs' },
+        (payload) => {
+          console.log('Change received!', payload);
+          loadAttendanceLogs(); // Reload attendance logs on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(attendanceChannel);
+    };
   }, [adminHeaders]);
 
   async function requestJson(url, options = {}) {
@@ -410,6 +442,80 @@ function AppShell({ authToken, authUser, onLogout }) {
     }
   }
 
+  async function loadEvents() {
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/events`, {
+        headers: adminHeaders,
+      });
+      setEvents(json.data || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function createEvent(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await requestJson(`${ADMIN_WEB_API}/events`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(eventForm),
+      });
+      setEventForm({ title: '', content: '', event_date: '', image_url: '', published_at: '' });
+      await loadEvents();
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function updateEvent(e) {
+    e.preventDefault();
+    if (!editingEventId) return;
+    setMessage('');
+    try {
+      await requestJson(`${ADMIN_WEB_API}/events/${editingEventId}`, {
+        method: 'PUT',
+        headers: adminHeaders,
+        body: JSON.stringify(eventForm),
+      });
+      setEditingEventId(null);
+      setEventForm({ title: '', content: '', event_date: '', image_url: '', published_at: '' });
+      await loadEvents();
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  function startEditEvent(item) {
+    setEditingEventId(item.id);
+    setEventForm({
+      title: item.title || '',
+      content: item.content || '',
+      event_date: item.event_date || '',
+      image_url: item.image_url || '',
+      published_at: item.published_at ? String(item.published_at).slice(0, 16) : '',
+    });
+  }
+
+  function cancelEditEvent() {
+    setEditingEventId(null);
+    setEventForm({ title: '', content: '', event_date: '', image_url: '', published_at: '' });
+  }
+
+  async function deleteEvent(id) {
+    if (!window.confirm('Xác nhận xóa sự kiện?')) return;
+    try {
+      await requestJson(`${ADMIN_WEB_API}/events/${id}`, {
+        method: 'DELETE',
+        headers: adminHeaders,
+      });
+      await loadEvents();
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
   async function loadGrades() {
     try {
       const json = await requestJson(`${ADMIN_WEB_API}/grades`, {
@@ -492,6 +598,12 @@ function AppShell({ authToken, authUser, onLogout }) {
     );
   }, [announcements, announcementSearch]);
 
+  const filteredEvents = useMemo(() => {
+    return events.filter((item) =>
+      matchesTextSearch(item, eventSearch, ['title', 'content'])
+    );
+  }, [events, eventSearch]);
+
   const filteredGrades = useMemo(() => {
     return grades.filter((item) =>
       matchesTextSearch(item, gradeSearch, ['student_code', 'subject_name', 'semester', 'school_year'])
@@ -503,6 +615,11 @@ function AppShell({ authToken, authUser, onLogout }) {
       matchesTextSearch(item, chatSearch, ['student_code', 'sender_role', 'sender_name', 'message_text'])
     );
   }, [chatMessages, chatSearch]);
+
+  const classes = useMemo(() => {
+    const uniqueClassNames = Array.from(new Set(students.map(s => s.class_name).filter(Boolean)));
+    return uniqueClassNames.map(name => ({ id: name, class_name: name }));
+  }, [students]);
 
   const adminStats = useMemo(() => {
     const paidFees = fees.filter((item) => String(item.payment_status || '').toLowerCase() === 'paid').length;
@@ -803,6 +920,10 @@ function AppShell({ authToken, authUser, onLogout }) {
   async function createStudent(event) {
     event.preventDefault();
     setMessage('');
+    if (!studentForm.student_code || !studentForm.full_name || !studentForm.class_name) {
+      setMessage('Vui lòng nhập đầy đủ Mã học sinh, Họ và tên, và Lớp.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/students`, {
         method: 'POST',
@@ -820,6 +941,10 @@ function AppShell({ authToken, authUser, onLogout }) {
     event.preventDefault();
     if (!editingStudentId) return;
     setMessage('');
+    if (!studentForm.full_name || !studentForm.class_name) {
+      setMessage('Vui lòng nhập đầy đủ Họ và tên và Lớp.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/students/${editingStudentId}`, {
         method: 'PUT',
@@ -912,6 +1037,14 @@ function AppShell({ authToken, authUser, onLogout }) {
   async function createTimetable(event) {
     event.preventDefault();
     setMessage('');
+    if (!timetableForm.class_id || !timetableForm.subject_name || !timetableForm.start_time || !timetableForm.end_time) {
+      setMessage('Vui lòng nhập đầy đủ Lớp, Môn học, Giờ bắt đầu và Giờ kết thúc.');
+      return;
+    }
+    if (timetableForm.start_time >= timetableForm.end_time) {
+      setMessage('Giờ kết thúc phải lớn hơn giờ bắt đầu.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/timetables`, {
         method: 'POST',
@@ -931,6 +1064,14 @@ function AppShell({ authToken, authUser, onLogout }) {
     event.preventDefault();
     if (!editingTimetableId) return;
     setMessage('');
+    if (!timetableForm.class_id || !timetableForm.subject_name || !timetableForm.start_time || !timetableForm.end_time) {
+      setMessage('Vui lòng nhập đầy đủ Lớp, Môn học, Giờ bắt đầu và Giờ kết thúc.');
+      return;
+    }
+    if (timetableForm.start_time >= timetableForm.end_time) {
+      setMessage('Giờ kết thúc phải lớn hơn giờ bắt đầu.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/timetables/${editingTimetableId}`, {
         method: 'PUT',
@@ -1001,6 +1142,14 @@ function AppShell({ authToken, authUser, onLogout }) {
   async function createFee(event) {
     event.preventDefault();
     setMessage('');
+    if (!feeForm.student_code || !feeForm.total_amount) {
+      setMessage('Vui lòng nhập Mã học sinh và Tổng tiền.');
+      return;
+    }
+    if (Number(feeForm.total_amount) < 0) {
+      setMessage('Tổng tiền không được âm.');
+      return;
+    }
     try {
       const subjectFees = JSON.parse(feeForm.subject_fees_text || '{}');
       const otherFees = JSON.parse(feeForm.other_fees_text || '{}');
@@ -1028,6 +1177,14 @@ function AppShell({ authToken, authUser, onLogout }) {
     event.preventDefault();
     if (!editingFeeId) return;
     setMessage('');
+    if (!feeForm.student_code || !feeForm.total_amount) {
+      setMessage('Vui lòng nhập Mã học sinh và Tổng tiền.');
+      return;
+    }
+    if (Number(feeForm.total_amount) < 0) {
+      setMessage('Tổng tiền không được âm.');
+      return;
+    }
     try {
       const subjectFees = JSON.parse(feeForm.subject_fees_text || '{}');
       const otherFees = JSON.parse(feeForm.other_fees_text || '{}');
@@ -1106,13 +1263,21 @@ function AppShell({ authToken, authUser, onLogout }) {
   async function createAnnouncement(event) {
     event.preventDefault();
     setMessage('');
+    if (!announcementForm.title || !announcementForm.content) {
+      setMessage('Vui lòng nhập Tiêu đề và Nội dung thông báo.');
+      return;
+    }
+    if (!announcementForm.is_general && !announcementForm.class_id) {
+      setMessage('Vui lòng chọn lớp nhận thông báo.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/announcements`, {
         method: 'POST',
         headers: adminHeaders,
         body: JSON.stringify(announcementForm),
       });
-      setAnnouncementForm({ title: '', content: '', priority: 'normal', is_general: true, send_notification: false });
+      setAnnouncementForm({ title: '', content: '', priority: 'normal', is_general: true, class_id: '', send_notification: false });
       await loadAnnouncements();
     } catch (error) {
       setMessage(error.message);
@@ -1135,6 +1300,16 @@ function AppShell({ authToken, authUser, onLogout }) {
   async function createGrade(event) {
     event.preventDefault();
     setMessage('');
+    if (!gradeForm.student_code || !gradeForm.subject_name) {
+      setMessage('Vui lòng nhập Mã học sinh và Môn học.');
+      return;
+    }
+    const midterm = Number(gradeForm.midterm_score || 0);
+    const final = Number(gradeForm.final_score || 0);
+    if (midterm < 0 || midterm > 10 || final < 0 || final > 10) {
+      setMessage('Điểm số phải nằm trong khoảng từ 0 đến 10.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/grades`, {
         method: 'POST',
@@ -1142,8 +1317,8 @@ function AppShell({ authToken, authUser, onLogout }) {
         body: JSON.stringify({
           student_code: gradeForm.student_code,
           subject_name: gradeForm.subject_name,
-          midterm_score: Number(gradeForm.midterm_score || 0),
-          final_score: Number(gradeForm.final_score || 0),
+          midterm_score: midterm,
+          final_score: final,
         }),
       });
       setGradeForm({
@@ -1236,10 +1411,12 @@ function AppShell({ authToken, authUser, onLogout }) {
             ['timetable', 'Thời khóa biểu (Mon-Sat)'],
             ['fees', 'Học phí & Thu phí'],
             ['announcements', 'Thông báo'],
+            ['events', 'Sự kiện'],
             ['grades', 'Bảng điểm'],
             ['chat', 'Tin nhắn'],
             ['attendance', 'Điểm danh'],
             ['system', 'Đồng bộ hệ thống'],
+            ['api-integrations', 'Tích hợp API'],
             ['device', 'Giả lập Quẹt thẻ'],
           ].map(([value, label]) => (
             <button
@@ -1615,14 +1792,21 @@ function AppShell({ authToken, authUser, onLogout }) {
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 text-lg font-semibold">Quản lý thời khóa biểu (Thứ 2 - Thứ 7)</h2>
             <form onSubmit={editingTimetableId ? updateTimetable : createTimetable} className="mb-4 grid gap-2 md:grid-cols-4">
-              <input
+              <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Lớp (VD: 10A1)"
                 value={timetableForm.class_id}
                 onChange={(e) =>
                   setTimetableForm((prev) => ({ ...prev, class_id: e.target.value }))
                 }
-              />
+                required
+              >
+                <option value="">Chọn lớp</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.class_name}
+                  </option>
+                ))}
+              </select>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Môn học"
@@ -1753,14 +1937,21 @@ function AppShell({ authToken, authUser, onLogout }) {
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 text-lg font-semibold">Quản lý học phí / khoản thu</h2>
             <form onSubmit={editingFeeId ? updateFee : createFee} className="mb-4 grid gap-2 md:grid-cols-3">
-              <input
+              <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Mã học sinh"
                 value={feeForm.student_code}
                 onChange={(e) =>
                   setFeeForm((prev) => ({ ...prev, student_code: e.target.value }))
                 }
-              />
+                required
+              >
+                <option value="">Chọn học sinh</option>
+                {students.map((s) => (
+                  <option key={s.id} value={s.student_code}>
+                    {s.student_code} - {s.full_name}
+                  </option>
+                ))}
+              </select>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Lớp"
@@ -1968,17 +2159,34 @@ function AppShell({ authToken, authUser, onLogout }) {
                 />
                 Gửi push tới phụ huynh
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={announcementForm.is_general}
-                  onChange={(e) =>
-                    setAnnouncementForm((prev) => ({ ...prev, is_general: e.target.checked }))
-                  }
-                />
-                Thông báo chung toàn trường
-              </label>
-              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+               <label className="flex items-center gap-2 text-sm">
+                 <input
+                   type="checkbox"
+                   checked={announcementForm.is_general}
+                   onChange={(e) =>
+                     setAnnouncementForm((prev) => ({ ...prev, is_general: e.target.checked }))
+                   }
+                 />
+                 Thông báo chung toàn trường
+               </label>
+               {!announcementForm.is_general && (
+                 <select
+                   className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                   value={announcementForm.class_id}
+                   onChange={(e) =>
+                     setAnnouncementForm((prev) => ({ ...prev, class_id: e.target.value }))
+                   }
+                   required
+                 >
+                   <option value="">Chọn lớp nhận thông báo</option>
+                   {classes.map((c) => (
+                     <option key={c.id} value={c.id}>
+                       {c.class_name}
+                     </option>
+                   ))}
+                 </select>
+               )}
+               <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
                 Đăng thông báo
               </button>
             </form>
@@ -2020,18 +2228,139 @@ function AppShell({ authToken, authUser, onLogout }) {
           </section>
         ) : null}
 
+        {tab === 'events' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <h2 className="mb-3 text-lg font-semibold">Sự kiện trường học</h2>
+            <form onSubmit={editingEventId ? updateEvent : createEvent} className="mb-4 grid gap-2">
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Tiêu đề sự kiện"
+                value={eventForm.title}
+                onChange={(e) => setEventForm(prev => ({ ...prev, title: e.target.value }))}
+                required
+              />
+              <textarea
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Nội dung sự kiện"
+                rows={3}
+                value={eventForm.content}
+                onChange={(e) => setEventForm(prev => ({ ...prev, content: e.target.value }))}
+                required
+              />
+              <div className="grid gap-2 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">Ngày diễn ra</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={eventForm.event_date}
+                    onChange={(e) => setEventForm(prev => ({ ...prev, event_date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">Ngày công bố</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={eventForm.published_at}
+                    onChange={(e) => setEventForm(prev => ({ ...prev, published_at: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">URL Hình ảnh</label>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="https://..."
+                    value={eventForm.image_url}
+                    onChange={(e) => setEventForm(prev => ({ ...prev, image_url: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+                  {editingEventId ? 'Cập nhật sự kiện' : 'Đăng sự kiện'}
+                </button>
+                {editingEventId && (
+                  <button
+                    type="button"
+                    onClick={cancelEditEvent}
+                    className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    Hủy
+                  </button>
+                )}
+              </div>
+            </form>
+            <ModuleSearch
+              value={eventSearch}
+              onChange={setEventSearch}
+              placeholder="Tìm theo tiêu đề hoặc nội dung sự kiện..."
+              count={filteredEvents.length}
+              total={events.length}
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              {filteredEvents.map((item) => (
+                <div key={item.id} className="flex flex-col rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm">
+                  {item.image_url && (
+                    <img
+                      src={item.image_url}
+                      alt={item.title}
+                      className="mb-3 h-32 w-full rounded-md object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
+                  <div className="flex flex-1 flex-col">
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <strong className="text-base text-slate-900">{item.title}</strong>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          onClick={() => startEditEvent(item)}
+                          className="rounded bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => deleteEvent(item.id)}
+                          className="rounded bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mb-3 line-clamp-3 text-slate-600">{item.content}</p>
+                    <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                      <span>📅 Diễn ra: {item.event_date || 'Chưa đặt'}</span>
+                      {item.published_at && (
+                        <span>📢 Công bố: {formatDateTime(item.published_at)}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {filteredEvents.length === 0 ? <EmptyState message="Chưa có sự kiện phù hợp với bộ lọc." /> : null}
+          </section>
+        ) : null}
+
         {tab === 'grades' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 text-lg font-semibold">Bảng điểm học sinh</h2>
             <form onSubmit={createGrade} className="mb-4 grid gap-2 md:grid-cols-4">
-              <input
+              <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Mã học sinh"
                 value={gradeForm.student_code}
                 onChange={(e) =>
                   setGradeForm((prev) => ({ ...prev, student_code: e.target.value }))
                 }
-              />
+                required
+              >
+                <option value="">Chọn học sinh</option>
+                {students.map((s) => (
+                  <option key={s.id} value={s.student_code}>
+                    {s.student_code} - {s.full_name}
+                  </option>
+                ))}
+              </select>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Môn học"
@@ -2348,6 +2677,31 @@ function AppShell({ authToken, authUser, onLogout }) {
                 {syncStatus.error}
               </div>
             ) : null}
+          </section>
+        ) : null}
+
+        {tab === 'api-integrations' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <h2 className="mb-3 text-lg font-semibold">Tích hợp API</h2>
+            <p className="mb-3 text-sm text-slate-500">Quản lý các kết nối API bên thứ ba.</p>
+            <div className="mb-4 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 p-4">
+              <p className="mb-2 text-sm font-semibold text-indigo-800">🔑 API Keys</p>
+              <p className="mb-3 text-xs text-indigo-700">
+                Tạo và quản lý API keys cho các trường học khác để đồng bộ dữ liệu.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Nhập tên API key..."
+                />
+                <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">
+                  Tạo API Key
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <EmptyState message="Chưa có API keys nào. Hãy tạo API key mới để bắt đầu." />
+            </div>
           </section>
         ) : null}
 

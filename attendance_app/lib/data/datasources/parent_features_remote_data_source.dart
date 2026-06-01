@@ -84,6 +84,7 @@ class ParentFeaturesRemoteDataSource {
           publishedAt: json['published_at'] == null
               ? null
               : DateTime.tryParse('${json['published_at']}'),
+          imageUrl: json['image_url']?.toString(),
         );
       }).toList();
     } on DioException catch (e) {
@@ -91,6 +92,34 @@ class ParentFeaturesRemoteDataSource {
       throw Exception(serverMsg ?? 'Không thể tải thông báo (${e.type.name})');
     } catch (e) {
       throw Exception('Lỗi khi tải thông báo: $e');
+    }
+  }
+
+  Future<List<AnnouncementItem>> fetchEvents() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/events',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final rows = response.data?['data'];
+      if (rows is! List) return const <AnnouncementItem>[];
+      return rows.whereType<Map<String, dynamic>>().map((json) {
+        return AnnouncementItem(
+          id: (json['id'] as num?)?.toInt() ?? 0,
+          title: '${json['title'] ?? ''}',
+          content: '${json['content'] ?? ''}',
+          priority: 'normal', // Mặc định priority cho event
+          publishedAt: json['event_date'] == null
+              ? null
+              : DateTime.tryParse('${json['event_date']}'),
+          imageUrl: json['image_url']?.toString(),
+        );
+      }).toList();
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(serverMsg ?? 'Không thể tải sự kiện (${e.type.name})');
+    } catch (e) {
+      throw Exception('Lỗi khi tải sự kiện: $e');
     }
   }
 

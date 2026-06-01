@@ -17,6 +17,7 @@ import '../../data/repositories/attendance_repository_impl.dart';
 import '../../data/repositories/students_repository_impl.dart';
 import '../../data/repositories/timetable_repository_impl.dart';
 import '../../data/services/fcm_service.dart';
+import '../../data/services/sse_service.dart';
 import '../../domain/auth/auth_state.dart';
 import '../../domain/auth/login_result.dart';
 import '../../domain/auth/parent_registration_result.dart';
@@ -62,6 +63,10 @@ final fcmServiceProvider = Provider<FcmService>((ref) {
   );
 });
 
+final sseServiceProvider = Provider<SseService>((ref) {
+  return SseService(dio: ref.read(dioProvider));
+});
+
 class AuthController extends Notifier<AuthState> {
   bool _initialized = false;
 
@@ -103,6 +108,7 @@ class AuthController extends Notifier<AuthState> {
 
     state = AuthState.authenticated(restoredUser);
     _initializeFcm();
+    _initializeSse();
   }
 
   Future<bool> signIn({required String email, required String password}) async {
@@ -112,8 +118,9 @@ class AuthController extends Notifier<AuthState> {
           .login(email: email, password: password);
       await _persistTokens(result.tokens);
       await ref.read(tokenStorageProvider).saveUser(result.user);
-      state = AuthState.authenticated(result.user);
-      _initializeFcm();
+    state = AuthState.authenticated(result.user);
+    _initializeFcm();
+    _initializeSse();
       return true;
     } catch (error) {
       state = AuthState.unauthenticated(_buildSignInErrorMessage(error));
@@ -139,6 +146,7 @@ class AuthController extends Notifier<AuthState> {
     await ref.read(tokenStorageProvider).saveUser(result.loginResult.user);
     state = AuthState.authenticated(result.loginResult.user);
     _initializeFcm();
+    _initializeSse();
     return result;
   }
 
@@ -173,6 +181,7 @@ class AuthController extends Notifier<AuthState> {
       } catch (_) {}
     }
 
+    await ref.read(sseServiceProvider).disconnect();
     await _clearTokens();
     state = const AuthState.unauthenticated();
   }
@@ -228,6 +237,15 @@ class AuthController extends Notifier<AuthState> {
     });
   }
 
+  void _initializeSse() {
+    Future<void>.microtask(() async {
+      final token = await readAccessToken();
+      if (token != null) {
+        await ref.read(sseServiceProvider).connect(token);
+      }
+    });
+  }
+
   Future<void> _clearTokens() async {
     await ref.read(tokenStorageProvider).clear();
     await ref.read(tokenSessionProvider).clear();
@@ -269,6 +287,15 @@ final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
 final attendanceHistoryProvider = FutureProvider<List<AttendanceRecord>>((
   ref,
 ) async {
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'attendance') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final repository = ref.watch(attendanceRepositoryProvider);
   return repository.fetchAttendanceHistory();
 });
@@ -283,16 +310,31 @@ final timetableRepositoryProvider = Provider<TimetableRepository>((ref) {
   return TimetableRepositoryImpl(dataSource);
 });
 
+/// Lắng nghe sự kiện SSE stream
+final sseEventsProvider = StreamProvider.autoDispose<Map<String, dynamic>>((ref) {
+  final sse = ref.watch(sseServiceProvider);
+  return sse.events;
+});
+
+/// Polling fallback: refresh mỗi 10 giây (giảm từ 3 giây) khi chưa có SSE đẩy về
 final parentLearningDataRefreshTickProvider =
     StreamProvider.autoDispose<DateTime>((ref) {
       return Stream<DateTime>.periodic(
-        const Duration(seconds: 3),
+        const Duration(seconds: 10),
         (_) => DateTime.now(),
       );
     });
 
 final timetableProvider = FutureProvider<List<TimetableEntry>>((ref) async {
-  ref.watch(parentLearningDataRefreshTickProvider);
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'timetable') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final repository = ref.watch(timetableRepositoryProvider);
   return repository.fetchTimetable();
 });
@@ -303,7 +345,15 @@ final feesDataSourceProvider = Provider<FeesRemoteDataSource>((ref) {
 });
 
 final feeNoticesProvider = FutureProvider<List<FeeNotice>>((ref) async {
-  ref.watch(parentLearningDataRefreshTickProvider);
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'fee') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final dataSource = ref.watch(feesDataSourceProvider);
   return dataSource.fetchFeeNotices();
 });
@@ -317,18 +367,59 @@ final parentFeaturesDataSourceProvider =
 final announcementsProvider = FutureProvider<List<AnnouncementItem>>((
   ref,
 ) async {
-  ref.watch(parentLearningDataRefreshTickProvider);
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'announcement') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchAnnouncements();
 });
 
+final eventsProvider = FutureProvider<List<AnnouncementItem>>((
+  ref,
+) async {
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'event') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchEvents();
+});
+
 final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'chat') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchChatMessages();
 });
 
 final gradesProvider = FutureProvider<List<GradeRecord>>((ref) async {
-  ref.watch(parentLearningDataRefreshTickProvider);
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'grade') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchGrades();
 });
@@ -344,6 +435,15 @@ final studentsRepositoryProvider = Provider<StudentsRepository>((ref) {
 });
 
 final studentsProvider = FutureProvider<List<StudentLinkInfo>>((ref) async {
+  ref.listen<AsyncValue<Map<String, dynamic>>>(sseEventsProvider, (previous, next) {
+    if (next.hasValue) {
+      final data = next.value;
+      if (data != null && data['data_type'] == 'student') {
+        ref.invalidateSelf();
+      }
+    }
+  });
+
   final repository = ref.watch(studentsRepositoryProvider);
   return repository.fetchStudents();
 });

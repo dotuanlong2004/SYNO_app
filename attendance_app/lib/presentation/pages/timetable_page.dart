@@ -8,7 +8,7 @@ import '../providers/dashboard_providers.dart';
 class TimetablePage extends ConsumerWidget {
   const TimetablePage({super.key});
 
-  static const Map<int, String> _dayLabels = <int, String>{
+  static const Map<int, String> dayLabels = <int, String>{
     1: 'Thứ 2',
     2: 'Thứ 3',
     3: 'Thứ 4',
@@ -34,9 +34,9 @@ class TimetablePage extends ConsumerWidget {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 900;
               if (isWide) {
-                return _WideTimetableLayout(groupedByDay: grouped);
+                return WideTimetableLayout(groupedByDay: grouped);
               }
-              return _MobileTimetableLayout(groupedByDay: grouped);
+              return MobileTimetableLayout(groupedByDay: grouped);
             },
           );
         },
@@ -58,7 +58,7 @@ class TimetablePage extends ConsumerWidget {
 
   Map<int, List<TimetableEntry>> _groupByDay(List<TimetableEntry> entries) {
     final map = <int, List<TimetableEntry>>{
-      for (final day in _dayLabels.keys) day: <TimetableEntry>[],
+      for (final day in dayLabels.keys) day: <TimetableEntry>[],
     };
     for (final entry in entries) {
       if (map.containsKey(entry.dayOfWeek)) {
@@ -72,8 +72,8 @@ class TimetablePage extends ConsumerWidget {
   }
 }
 
-class _MobileTimetableLayout extends StatelessWidget {
-  const _MobileTimetableLayout({required this.groupedByDay});
+class MobileTimetableLayout extends StatelessWidget {
+  const MobileTimetableLayout({super.key, required this.groupedByDay});
 
   final Map<int, List<TimetableEntry>> groupedByDay;
 
@@ -117,8 +117,8 @@ class _MobileTimetableLayout extends StatelessWidget {
   }
 }
 
-class _WideTimetableLayout extends StatelessWidget {
-  const _WideTimetableLayout({required this.groupedByDay});
+class WideTimetableLayout extends StatelessWidget {
+  const WideTimetableLayout({super.key, required this.groupedByDay});
 
   final Map<int, List<TimetableEntry>> groupedByDay;
 
