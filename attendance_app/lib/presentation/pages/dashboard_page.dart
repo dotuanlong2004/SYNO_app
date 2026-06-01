@@ -29,12 +29,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       const _OverviewTab(),
       const _HistoryTab(),
       const _TimetableTab(),
+      const _EventsTab(),
       const _ProfileTab(), // Tab Cá nhân thay cho các tab riêng lẻ
     ];
     final titles = <String>[
       'Tổng quan',
       'Lịch sử',
       'Thời khóa biểu',
+      'Sự kiện',
       'Cá nhân',
     ];
     final destinations = <NavigationDestination>[
@@ -51,6 +53,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         icon: Icon(Icons.calendar_month_outlined),
         selectedIcon: Icon(Icons.calendar_month_rounded),
         label: 'Lịch học',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.event_note_outlined),
+        selectedIcon: Icon(Icons.event_note_rounded),
+        label: 'Sự kiện',
       ),
       const NavigationDestination(
         icon: Icon(Icons.person_outline_rounded),
@@ -1733,9 +1740,35 @@ class _FeeRow extends StatelessWidget {
   }
 }
 
-// ─── Thông Báo ───────────────────────────────────────────────────────────────
+// ─── Thông Báo / Sự Kiện ────────────────────────────────────────────────────
+enum _NewsFeedMode { announcements, events }
+
+class _EventsTab extends StatelessWidget {
+  const _EventsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _NewsTab(mode: _NewsFeedMode.events);
+  }
+}
+
 class _NewsTab extends ConsumerWidget {
-  const _NewsTab();
+  const _NewsTab({this.mode = _NewsFeedMode.announcements});
+
+  final _NewsFeedMode mode;
+
+  bool get _isEvents => mode == _NewsFeedMode.events;
+
+  IconData get _feedIcon =>
+      _isEvents ? Icons.event_note_rounded : Icons.campaign_rounded;
+
+  String get _emptyMessage =>
+      _isEvents ? 'Chưa có sự kiện' : 'Chưa có thông báo';
+
+  String get _errorMessage =>
+      _isEvents ? 'Không thể tải sự kiện' : 'Không thể tải thông báo';
+
+  String get _detailLabel => _isEvents ? 'Sự kiện' : 'Thông báo';
 
   String _priorityLabel(String priority) {
     switch (priority.toLowerCase()) {
@@ -1766,8 +1799,8 @@ class _NewsTab extends ConsumerWidget {
       data: (items) {
         if (items.isEmpty) {
           return _EmptyState(
-            icon: Icons.campaign_rounded,
-            message: 'Chưa có thông báo',
+            icon: _feedIcon,
+            message: _emptyMessage,
           );
         }
         return RefreshIndicator(
@@ -1815,7 +1848,7 @@ class _NewsTab extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      Icons.campaign_rounded,
+                      _feedIcon,
                       color: isNew ? priorityColor : Colors.grey,
                       size: 22,
                     ),
@@ -1912,7 +1945,7 @@ class _NewsTab extends ConsumerWidget {
           ),
         );
       },
-      error: (e, _) => _ErrorState(message: 'Không thể tải thông báo'),
+      error: (e, _) => _ErrorState(message: _errorMessage),
       loading: () => const Center(
         child: CircularProgressIndicator(color: AppTheme.primaryOrange),
       ),
@@ -1956,14 +1989,14 @@ class _NewsTab extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Icons.campaign_rounded,
+                    _feedIcon,
                     color: _priorityColor(item.priority),
                     size: 20,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'Thông báo',
+                  _detailLabel,
                   style: TextStyle(
                     color: _priorityColor(item.priority),
                     fontWeight: FontWeight.w600,
@@ -2721,7 +2754,7 @@ class _ProfileTab extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
 
-        // ── Cài đặt & Đăng xuất ───────────────────────────────────
+        // ── Đăng xuất ─────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Container(
@@ -2738,38 +2771,6 @@ class _ProfileTab extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  leading: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.settings_rounded,
-                      color: Colors.grey,
-                      size: 22,
-                    ),
-                  ),
-                  title: const Text(
-                    'Cài đặt',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.grey,
-                  ),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsPage()),
-                  ),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
