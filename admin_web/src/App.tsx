@@ -178,6 +178,52 @@ function EmptyState({ message }) {
   );
 }
 
+function mapEntries(value) {
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).filter(([, amount]) => Number(amount || 0) > 0);
+}
+
+function feeSearchText(item) {
+  return [
+    item.student_code,
+    item.class_id,
+    item.payment_status,
+    paymentStatusLabel(item.payment_status),
+    item.payment_method,
+    item.total_amount,
+    ...mapEntries(item.subject_fees).flat(),
+    ...mapEntries(item.other_fees).flat(),
+  ].join(' ');
+}
+
+function timetableSearchText(item) {
+  return [
+    item.class_id,
+    item.subject_name,
+    dayLabel(item.day_of_week),
+    item.day_of_week,
+    item.period,
+    item.start_time,
+    item.end_time,
+    item.teacher_name,
+    item.room,
+  ].join(' ');
+}
+
+function includesQuery(text, query) {
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle) return true;
+  return String(text || '').toLowerCase().includes(needle);
+}
+
+function formatLooseCurrency(value) {
+  return formatCurrency(String(value ?? 0));
+}
+
+function FieldLabel({ children }) {
+  return <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">{children}</label>;
+}
+
 // ─── AppShell: Toàn bộ Admin UI (chỉ render khi đã đăng nhập) ──────────────
 function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [tab, setTab] = useState('students');
@@ -200,6 +246,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     password: ''
   });
   const [timetables, setTimetables] = useState([]);
+  const [selectedTimetable, setSelectedTimetable] = useState(null);
   const [timetableForm, setTimetableForm] = useState({
     class_id: '',
     subject_name: '',
@@ -212,6 +259,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   });
   const [editingTimetableId, setEditingTimetableId] = useState(null);
   const [fees, setFees] = useState([]);
+  const [selectedFee, setSelectedFee] = useState(null);
   const [feeForm, setFeeForm] = useState({
     student_code: '',
     class_id: '',
@@ -553,16 +601,26 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   }, [students, studentSearch]);
 
   const filteredTimetables = useMemo(() => {
-    return timetables.filter((item) =>
-      matchesTextSearch(item, timetableSearch, ['class_id', 'subject_name', 'teacher_name', 'room', 'period'])
-    );
+    return timetables.filter((item) => includesQuery(timetableSearchText(item), timetableSearch));
   }, [timetables, timetableSearch]);
 
   const filteredFees = useMemo(() => {
-    return fees.filter((item) =>
-      matchesTextSearch(item, feeSearch, ['student_code', 'class_id', 'payment_status', 'payment_method'])
-    );
+    return fees.filter((item) => includesQuery(feeSearchText(item), feeSearch));
   }, [fees, feeSearch]);
+
+  const classOptions = useMemo(() => {
+    const values = new Set([
+      ...students.map((student) => student.class_name),
+      ...timetables.map((item) => item.class_id),
+      ...fees.map((item) => item.class_id),
+    ]);
+    return Array.from(values).filter(Boolean).sort();
+  }, [students, timetables, fees]);
+
+  const subjectOptions = useMemo(() => {
+    const values = new Set(timetables.map((item) => item.subject_name));
+    return Array.from(values).filter(Boolean).sort();
+  }, [timetables]);
 
   const filteredAnnouncements = useMemo(() => {
     return announcements.filter((item) =>
@@ -1042,6 +1100,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   }
 
   function startEditTimetable(item) {
+    setSelectedTimetable(item);
     setEditingTimetableId(item.id);
     setTimetableForm({
       class_id: item.class_id || '',
@@ -1076,6 +1135,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         method: 'DELETE',
         headers: adminHeaders,
       });
+      if (selectedTimetable?.id === id) setSelectedTimetable(null);
       await loadTimetables();
     } catch (error) {
       setMessage(error.message);
@@ -1147,6 +1207,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   }
 
   function startEditFee(item) {
+    setSelectedFee(item);
     setEditingFeeId(item.id);
     setFeeForm({
       student_code: item.student_code || '',
@@ -1181,6 +1242,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         method: 'DELETE',
         headers: adminHeaders,
       });
+      if (selectedFee?.id === id) setSelectedFee(null);
       await loadFees();
     } catch (error) {
       setMessage(error.message);
@@ -1375,6 +1437,24 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             {message}
           </div>
         ) : null}
+
+        <datalist id="student-code-options">
+          {students.map((student) => (
+            <option key={student.id} value={student.student_code}>
+              {student.full_name} - {student.class_name}
+            </option>
+          ))}
+        </datalist>
+        <datalist id="class-options">
+          {classOptions.map((className) => (
+            <option key={className} value={className} />
+          ))}
+        </datalist>
+        <datalist id="subject-options">
+          {subjectOptions.map((subjectName) => (
+            <option key={subjectName} value={subjectName} />
+          ))}
+        </datalist>
 
 
         {tab === 'students' ? (
@@ -1729,41 +1809,55 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 text-lg font-semibold">Quản lý thời khóa biểu (Thứ 2 - Thứ 7)</h2>
             <form onSubmit={editingTimetableId ? updateTimetable : createTimetable} className="mb-4 grid gap-2 md:grid-cols-4">
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Lớp (VD: 10A1)"
-                value={timetableForm.class_id}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, class_id: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Môn học"
-                value={timetableForm.subject_name}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, subject_name: e.target.value }))
-                }
-              />
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={timetableForm.day_of_week}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, day_of_week: Number(e.target.value) }))
-                }
-              >
-                {[1, 2, 3, 4, 5, 6].map((d) => (
-                  <option key={d} value={d}>{`Thứ ${d + 1}`}</option>
-                ))}
-              </select>
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Tiết học (VD: Tiết 1)"
-                value={timetableForm.period}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, period: e.target.value }))
-                }
-              />
+              <div>
+                <FieldLabel>Lớp</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: 10A1"
+                  list="class-options"
+                  value={timetableForm.class_id}
+                  onChange={(e) =>
+                    setTimetableForm((prev) => ({ ...prev, class_id: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Môn học</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: Toán"
+                  list="subject-options"
+                  value={timetableForm.subject_name}
+                  onChange={(e) =>
+                    setTimetableForm((prev) => ({ ...prev, subject_name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Thứ</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={timetableForm.day_of_week}
+                  onChange={(e) =>
+                    setTimetableForm((prev) => ({ ...prev, day_of_week: Number(e.target.value) }))
+                  }
+                >
+                  {[1, 2, 3, 4, 5, 6].map((d) => (
+                    <option key={d} value={d}>{`Thứ ${d + 1}`}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Tiết học</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: Tiết 1"
+                  value={timetableForm.period}
+                  onChange={(e) =>
+                    setTimetableForm((prev) => ({ ...prev, period: e.target.value }))
+                  }
+                />
+              </div>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 type="time"
@@ -1812,10 +1906,32 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             <ModuleSearch
               value={timetableSearch}
               onChange={setTimetableSearch}
-              placeholder="Tìm theo lớp, môn học, giáo viên, phòng..."
+              placeholder="Tìm theo lớp, môn học, thứ, tiết, giờ, giáo viên, phòng..."
               count={filteredTimetables.length}
               total={timetables.length}
             />
+            {selectedTimetable ? (
+              <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-blue-700">Chi tiết tiết học</div>
+                    <div className="text-lg font-bold text-slate-950">
+                      {selectedTimetable.subject_name} - {selectedTimetable.class_id}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setSelectedTimetable(null)} className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                    Đóng
+                  </button>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  <div><strong>Thứ:</strong> {dayLabel(selectedTimetable.day_of_week)}</div>
+                  <div><strong>Tiết:</strong> {selectedTimetable.period || '-'}</div>
+                  <div><strong>Giờ:</strong> {String(selectedTimetable.start_time).slice(0, 5)} - {String(selectedTimetable.end_time).slice(0, 5)}</div>
+                  <div><strong>Phòng:</strong> {selectedTimetable.room || '-'}</div>
+                  <div className="md:col-span-4"><strong>Giáo viên:</strong> {selectedTimetable.teacher_name || '-'}</div>
+                </div>
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead>
@@ -1831,7 +1947,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 </thead>
                 <tbody>
                   {filteredTimetables.map((t) => (
-                    <tr key={t.id} className="border-b">
+                    <tr
+                      key={t.id}
+                      onClick={() => setSelectedTimetable(t)}
+                      className={`cursor-pointer border-b hover:bg-blue-50 ${selectedTimetable?.id === t.id ? 'bg-blue-50' : ''}`}
+                    >
                       <td className="py-2">{t.class_id}</td>
                       <td className="py-2">{t.subject_name}</td>
                       <td className="py-2">{dayLabel(t.day_of_week)}</td>
@@ -1841,13 +1961,19 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                       <td className="py-2">
                         <div className="flex gap-2">
                           <button
-                            onClick={() => startEditTimetable(t)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startEditTimetable(t);
+                            }}
                             className="rounded bg-amber-100 px-2 py-1 text-amber-700"
                           >
                             Sửa
                           </button>
                           <button
-                            onClick={() => deleteTimetable(t.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteTimetable(t.id);
+                            }}
                             className="rounded bg-rose-100 px-2 py-1 text-rose-700"
                           >
                             Xóa
@@ -1867,46 +1993,65 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 text-lg font-semibold">Quản lý học phí / khoản thu</h2>
             <form onSubmit={editingFeeId ? updateFee : createFee} className="mb-4 grid gap-2 md:grid-cols-3">
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Mã học sinh"
-                value={feeForm.student_code}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, student_code: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Lớp"
-                value={feeForm.class_id}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, class_id: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Tổng tiền"
-                value={feeForm.total_amount}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, total_amount: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-3"
-                placeholder='Subject fees JSON, vd {"toan":300000,"anh":200000}'
-                value={feeForm.subject_fees_text}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, subject_fees_text: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-3"
-                placeholder='Other fees JSON, vd {"ban_tru":200000}'
-                value={feeForm.other_fees_text}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, other_fees_text: e.target.value }))
-                }
-              />
+              <div>
+                <FieldLabel>Mã học sinh</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: HS0085"
+                  list="student-code-options"
+                  value={feeForm.student_code}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, student_code: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Lớp</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: 10C2"
+                  list="class-options"
+                  value={feeForm.class_id}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, class_id: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Tổng tiền</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: 500000"
+                  value={feeForm.total_amount}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, total_amount: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="md:col-span-3">
+                <FieldLabel>Khoản học phí theo môn</FieldLabel>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+                  placeholder='VD: {"toan":300000,"anh":200000}'
+                  value={feeForm.subject_fees_text}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, subject_fees_text: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="md:col-span-3">
+                <FieldLabel>Khoản thu khác</FieldLabel>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+                  placeholder='VD: {"ban_tru":200000}'
+                  value={feeForm.other_fees_text}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, other_fees_text: e.target.value }))
+                  }
+                />
+              </div>
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 value={feeForm.payment_status}
@@ -1953,13 +2098,58 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             <ModuleSearch
               value={feeSearch}
               onChange={setFeeSearch}
-              placeholder="Tìm theo mã học sinh, lớp, trạng thái, phương thức..."
+              placeholder="Tìm theo mã học sinh, lớp, trạng thái, phương thức, khoản thu, số tiền..."
               count={filteredFees.length}
               total={fees.length}
             />
+            {selectedFee ? (
+              <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-slate-700">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-emerald-700">Chi tiết khoản phí</div>
+                    <div className="text-lg font-bold text-slate-950">
+                      {selectedFee.student_code} - {formatCurrency(selectedFee.total_amount)}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setSelectedFee(null)} className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                    Đóng
+                  </button>
+                </div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div><strong>Lớp:</strong> {selectedFee.class_id || '-'}</div>
+                  <div><strong>Trạng thái:</strong> {paymentStatusLabel(selectedFee.payment_status)}</div>
+                  <div><strong>Phương thức:</strong> {selectedFee.payment_method || '-'}</div>
+                  <div><strong>Thời gian:</strong> {formatDateTime(selectedFee.paid_at)}</div>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg bg-white p-3 ring-1 ring-emerald-100">
+                    <div className="mb-2 font-semibold text-slate-900">Học phí theo môn</div>
+                    {mapEntries(selectedFee.subject_fees).length ? mapEntries(selectedFee.subject_fees).map(([label, amount]) => (
+                      <div key={label} className="flex justify-between border-t border-slate-100 py-1">
+                        <span>{label}</span>
+                        <strong>{formatLooseCurrency(amount)}</strong>
+                      </div>
+                    )) : <span className="text-slate-500">Chưa có dữ liệu</span>}
+                  </div>
+                  <div className="rounded-lg bg-white p-3 ring-1 ring-emerald-100">
+                    <div className="mb-2 font-semibold text-slate-900">Khoản thu khác</div>
+                    {mapEntries(selectedFee.other_fees).length ? mapEntries(selectedFee.other_fees).map(([label, amount]) => (
+                      <div key={label} className="flex justify-between border-t border-slate-100 py-1">
+                        <span>{label}</span>
+                        <strong>{formatLooseCurrency(amount)}</strong>
+                      </div>
+                    )) : <span className="text-slate-500">Chưa có dữ liệu</span>}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="space-y-2">
               {filteredFees.map((f) => (
-                <div key={f.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                <div
+                  key={f.id}
+                  onClick={() => setSelectedFee(f)}
+                  className={`cursor-pointer rounded-lg border border-slate-200 p-3 text-sm hover:border-emerald-200 hover:bg-emerald-50 ${selectedFee?.id === f.id ? 'border-emerald-300 bg-emerald-50' : ''}`}
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <strong>{f.student_code}</strong> • {f.class_id || '-'} •{' '}
@@ -1967,13 +2157,19 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => startEditFee(f)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEditFee(f);
+                        }}
                         className="rounded bg-amber-100 px-2 py-1 text-amber-700"
                       >
                         Sửa
                       </button>
                       <button
-                        onClick={() => deleteFee(f.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteFee(f.id);
+                        }}
                         className="rounded bg-rose-100 px-2 py-1 text-rose-700"
                       >
                         Xóa
@@ -1986,6 +2182,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     </span>
                     <span>Phương thức: {f.payment_method || '-'}</span>
                     <span>Thời gian: {formatDateTime(f.paid_at)}</span>
+                  </div>
+                  <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
+                    <span>Học phí: {mapEntries(f.subject_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
+                    <span>Khoản khác: {mapEntries(f.other_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
                   </div>
                 </div>
               ))}

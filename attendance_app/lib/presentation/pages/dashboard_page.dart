@@ -1542,6 +1542,11 @@ class _FeeMetric extends StatelessWidget {
   }
 }
 
+double _parseMoneyValue(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('${value ?? ''}') ?? 0;
+}
+
 class _FeeNoticeCard extends StatelessWidget {
   const _FeeNoticeCard({required this.fee});
   final FeeNotice fee;
@@ -1679,13 +1684,13 @@ class _FeeNoticeCard extends StatelessWidget {
                   ...fee.subjectFees.entries.map(
                     (e) => _FeeRow(
                       label: e.key,
-                      amount: (e.value as num?)?.toDouble() ?? 0,
+                      amount: _parseMoneyValue(e.value),
                     ),
                   ),
                   ...fee.otherFees.entries.map(
                     (e) => _FeeRow(
                       label: e.key,
-                      amount: (e.value as num?)?.toDouble() ?? 0,
+                      amount: _parseMoneyValue(e.value),
                     ),
                   ),
                 ],

@@ -284,13 +284,7 @@ final timetableRepositoryProvider = Provider<TimetableRepository>((ref) {
   return TimetableRepositoryImpl(dataSource);
 });
 
-final parentLearningDataRefreshTickProvider =
-    StreamProvider.autoDispose<DateTime>((ref) {
-      return Stream<DateTime>.periodic(
-        const Duration(seconds: 3),
-        (_) => DateTime.now(),
-      );
-    });
+final parentLearningDataRefreshTickProvider = Provider<int>((ref) => 0);
 
 final timetableProvider = FutureProvider<List<TimetableEntry>>((ref) async {
   ref.watch(parentLearningDataRefreshTickProvider);

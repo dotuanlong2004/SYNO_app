@@ -10,9 +10,11 @@ class ParentFeaturesRemoteDataSource {
 
   final Dio _dio;
 
+  int _parseInt(dynamic value) => int.tryParse('${value ?? ''}') ?? 0;
+
   ChatMessage _parseChatMessage(Map<String, dynamic> json) {
     return ChatMessage(
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      id: _parseInt(json['id']),
       studentCode: '${json['student_code'] ?? ''}',
       senderRole: '${json['sender_role'] ?? ''}',
       senderName: '${json['sender_name'] ?? ''}',
@@ -78,7 +80,7 @@ class ParentFeaturesRemoteDataSource {
       if (rows is! List) return const <AnnouncementItem>[];
       return rows.whereType<Map<String, dynamic>>().map((json) {
         return AnnouncementItem(
-          id: (json['id'] as num?)?.toInt() ?? 0,
+          id: _parseInt(json['id']),
           title: '${json['title'] ?? ''}',
           content: '${json['content'] ?? ''}',
           priority: '${json['priority'] ?? 'normal'}',
@@ -105,7 +107,7 @@ class ParentFeaturesRemoteDataSource {
       if (rows is! List) return const <SchoolEventItem>[];
       return rows.whereType<Map<String, dynamic>>().map((json) {
         return SchoolEventItem(
-          id: (json['id'] as num?)?.toInt() ?? 0,
+          id: _parseInt(json['id']),
           title: '${json['title'] ?? ''}',
           content: '${json['content'] ?? ''}',
           imageUrl: '${json['image_url'] ?? ''}',
@@ -137,7 +139,7 @@ class ParentFeaturesRemoteDataSource {
           v is num ? v.toDouble() : (double.tryParse('$v') ?? 0);
       return rows.whereType<Map<String, dynamic>>().map((json) {
         return GradeRecord(
-          id: (json['id'] as num?)?.toInt() ?? 0,
+          id: _parseInt(json['id']),
           studentCode: '${json['student_code'] ?? ''}',
           subjectName: '${json['subject_name'] ?? ''}',
           midtermScore: parseNum(json['midterm_score']),

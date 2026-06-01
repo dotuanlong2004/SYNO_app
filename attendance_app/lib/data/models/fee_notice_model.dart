@@ -19,18 +19,18 @@ class FeeNoticeModel extends FeeNotice {
       return double.tryParse('$value') ?? 0;
     }
 
+    int parseInt(dynamic value) => int.tryParse('${value ?? ''}') ?? 0;
+
     Map<String, dynamic> parseMap(dynamic value) {
       if (value is Map<String, dynamic>) return value;
       if (value is Map) {
-        return value.map(
-          (key, val) => MapEntry('$key', val),
-        );
+        return value.map((key, val) => MapEntry('$key', val));
       }
       return const <String, dynamic>{};
     }
 
     return FeeNoticeModel(
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      id: parseInt(json['id']),
       studentCode: '${json['student_code'] ?? ''}',
       classId: json['class_id'] == null ? null : '${json['class_id']}',
       subjectFees: parseMap(json['subject_fees']),
