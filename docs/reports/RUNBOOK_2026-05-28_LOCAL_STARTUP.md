@@ -134,6 +134,37 @@ Lưu ý emulator:
 - `SYNO_Light_API_37` đã thử tạo thủ công nhưng bị lỗi display/splash, không dùng để kiểm tra app.
 - `Pixel_10_Pro_XL` có thể hiện ANR `com.android.systemui` lúc mới boot. Bấm `Wait` hoặc dùng phím/tap để dismiss rồi chờ thêm.
 
+Fix nhanh khi emulator hiện popup `System UI isn't responding`:
+
+```bat
+set ADB_VENDOR_KEYS=C:\Users\ASUS\.android\adbkey
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell input keyevent DPAD_DOWN
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell input keyevent ENTER
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell settings put global window_animation_scale 0
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell settings put global transition_animation_scale 0
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell settings put global animator_duration_scale 0
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell wm size 720x1600
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell wm density 320
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell am force-stop com.example.attendance_app
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell monkey -p com.example.attendance_app -c android.intent.category.LAUNCHER 1
+```
+
+Kiểm tra đã nhẹ hơn và app đang focus:
+
+```bat
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell wm size
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell wm density
+D:\Sdk\platform-tools\adb.exe -s emulator-5554 shell dumpsys window | findstr mCurrentFocus
+```
+
+Kết quả mong muốn có:
+
+```text
+Override size: 720x1600
+Override density: 320
+com.example.attendance_app/com.example.attendance_app.MainActivity
+```
+
 ## 6. Build Parent App
 
 Chạy từ thư mục app:
