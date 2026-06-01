@@ -16,8 +16,10 @@ const {
   summarizePushResults,
 } = require('../services/adminWebAnnouncements');
 const {
+  attachStudentCodesToChatMessages,
   buildStaffChatMessagePayload,
   buildStaffChatPushPayload,
+  findChatStudentByCode,
 } = require('../services/adminWebChatMessages');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { buildGradePayload } = require('../services/adminWebGrades');
@@ -179,13 +181,21 @@ router.get('/chat/messages', async (req, res) => {
 
   let query = supabase
     .from('chat_messages')
-    .select('id, student_code, sender_role, sender_name, message_text, created_at')
+    .select('id, school_id, student_id, sender_role, sender_name, message_text, created_at')
     .eq('school_id', req.schoolId)
     .order('created_at', { ascending: true })
     .limit(300);
 
   if (studentCode) {
-    query = query.eq('student_code', studentCode);
+    const student = await findChatStudentByCode({
+      supabase,
+      schoolId: req.schoolId,
+      studentCode,
+    });
+    if (!student) {
+      return res.json({ ok: true, data: [] });
+    }
+    query = query.eq('student_id', student.id);
   }
 
   const { data, error } = await query;
@@ -193,7 +203,16 @@ router.get('/chat/messages', async (req, res) => {
     return res.status(500).json({ ok: false, error: error.message });
   }
 
-  return res.json({ ok: true, data });
+  try {
+    const rows = await attachStudentCodesToChatMessages({
+      supabase,
+      schoolId: req.schoolId,
+      rows: data || [],
+    });
+    return res.json({ ok: true, data: rows });
+  } catch (mapError) {
+    return res.status(500).json({ ok: false, error: mapError.message });
+  }
 });
 
 // POST /admin-web/students/bulk  — Excel import (upsert by student_code)
@@ -606,18 +625,27 @@ router.post('/chat/messages', async (req, res) => {
 
   const { data, error } = await supabase
     .from('chat_messages')
-    .insert(payload)
-    .select('id, school_id, student_code, sender_role, sender_name, message_text, created_at')
+    .insert({
+      school_id: payload.school_id,
+      student_id: student.id,
+      sender_role: payload.sender_role,
+      sender_id: payload.sender_id || null,
+      sender_name: payload.sender_name,
+      message_text: payload.message_text,
+    })
+    .select('id, school_id, student_id, sender_role, sender_name, message_text, created_at')
     .single();
 
   if (error) {
     return res.status(500).json({ ok: false, error: error.message });
   }
 
+  const message = { ...data, student_code: payload.student_code };
+
   if (!student.parent_id) {
     return res.status(201).json({
       ok: true,
-      data,
+      data: message,
       notification: { attempted: 0, sent: 0, failed: 0 },
     });
   }
@@ -634,7 +662,7 @@ router.post('/chat/messages', async (req, res) => {
     console.warn('[admin-chat] Failed to load parent FCM token:', parentError.message);
     return res.status(201).json({
       ok: true,
-      data,
+      data: message,
       notification: {
         attempted: 0,
         sent: 0,
@@ -647,7 +675,7 @@ router.post('/chat/messages', async (req, res) => {
   if (!parentProfile?.fcm_token) {
     return res.status(201).json({
       ok: true,
-      data,
+      data: message,
       notification: { attempted: 0, sent: 0, failed: 0 },
     });
   }
@@ -655,19 +683,19 @@ router.post('/chat/messages', async (req, res) => {
   try {
     await sendPushNotification(buildStaffChatPushPayload({
       token: parentProfile.fcm_token,
-      message: data,
+      message,
     }));
 
     return res.status(201).json({
       ok: true,
-      data,
+      data: message,
       notification: summarizePushResults([{ ok: true }]),
     });
   } catch (pushError) {
     console.warn('[admin-chat] FCM send failed:', pushError.message);
     return res.status(201).json({
       ok: true,
-      data,
+      data: message,
       notification: summarizePushResults([{ ok: false }]),
     });
   }

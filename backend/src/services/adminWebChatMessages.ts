@@ -59,6 +59,69 @@ export function buildStaffChatMessagePayload({
   };
 }
 
+export async function findChatStudentByCode({
+  supabase,
+  schoolId,
+  studentCode,
+}: {
+  supabase: any;
+  schoolId: string;
+  studentCode: string;
+}) {
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, student_code, parent_id')
+    .eq('school_id', schoolId)
+    .eq('student_code', studentCode)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data || null;
+}
+
+export async function attachStudentCodesToChatMessages({
+  supabase,
+  schoolId,
+  rows,
+}: {
+  supabase: any;
+  schoolId: string;
+  rows: Array<Record<string, any>>;
+}) {
+  const studentIds = [
+    ...new Set(
+      rows
+        .map((row) => row.student_id)
+        .filter((value) => value !== null && value !== undefined),
+    ),
+  ];
+
+  if (studentIds.length === 0) {
+    return rows.map((row) => ({ ...row, student_code: '' }));
+  }
+
+  const { data: students, error } = await supabase
+    .from('students')
+    .select('id, student_code')
+    .eq('school_id', schoolId)
+    .in('id', studentIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const codeById = new Map(
+    (students || []).map((student) => [String(student.id), student.student_code || '']),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    student_code: row.student_id == null ? '' : codeById.get(String(row.student_id)) || '',
+  }));
+}
+
 export function buildStaffChatPushPayload({
   token,
   message,

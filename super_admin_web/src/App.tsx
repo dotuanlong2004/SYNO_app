@@ -594,8 +594,20 @@ function EmptyState({ message }: { message: string }) {
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || '');
+  const [token, setToken] = useState(() => {
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+    const savedRefreshToken = localStorage.getItem(AUTH_REFRESH_TOKEN_KEY) || '';
+    if (savedToken && !savedRefreshToken) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      return '';
+    }
+    return savedToken;
+  });
   const [user, setUser] = useState<AuthUser | null>(() => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
+      return null;
+    }
     const raw = localStorage.getItem(AUTH_USER_KEY);
     return raw ? JSON.parse(raw) : null;
   });

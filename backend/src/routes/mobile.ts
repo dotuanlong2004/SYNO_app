@@ -7,6 +7,10 @@
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const {
+  attachStudentCodesToChatMessages,
+  findChatStudentByCode,
+} = require('../services/adminWebChatMessages');
 const { initializeFirebaseAdmin } = require('../config/firebaseAdmin');
 const { saveUserFcmToken, validateFcmToken } = require('../services/userNotificationTokens');
 
@@ -290,7 +294,7 @@ router.get('/chat/messages', mobileAuth, async (req, res) => {
   try {
     let query = supabase
       .from('chat_messages')
-      .select('id, student_code, sender_role, sender_name, message_text, created_at')
+      .select('id, school_id, student_id, sender_role, sender_name, message_text, created_at')
       .eq('school_id', schoolId)
       .order('created_at', { ascending: true })
       .limit(200);
@@ -298,11 +302,16 @@ router.get('/chat/messages', mobileAuth, async (req, res) => {
       if (!studentCode) {
         return res.status(400).json({ ok: false, error: 'Parent account is not linked to any student_code' });
       }
-      query = query.eq('student_code', studentCode);
+      const student = await findChatStudentByCode({ supabase, schoolId, studentCode });
+      if (!student) {
+        return res.status(200).json({ ok: true, count: 0, data: [] });
+      }
+      query = query.eq('student_id', student.id);
     }
     const { data, error } = await query;
     if (error) throw error;
-    return res.status(200).json({ ok: true, count: data.length, data });
+    const rows = await attachStudentCodesToChatMessages({ supabase, schoolId, rows: data || [] });
+    return res.status(200).json({ ok: true, count: rows.length, data: rows });
   } catch (error) {
     console.error('Failed to fetch mobile chat messages', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
@@ -322,20 +331,26 @@ router.post('/chat/messages', mobileAuth, async (req, res) => {
     return res.status(403).json({ ok: false, error: 'Parent can only send for linked student_code' });
   }
   try {
-    const { data, error } = await getSupabase()
+    const supabase = getSupabase();
+    const student = await findChatStudentByCode({ supabase, schoolId, studentCode });
+    if (!student) {
+      return res.status(404).json({ ok: false, error: `student_code ${studentCode} was not found in school ${schoolId}` });
+    }
+
+    const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         school_id: schoolId,
-        student_code: studentCode,
+        student_id: student.id,
         sender_role: userRole || 'parent',
         sender_id: req.user.id,
         sender_name: req.user.full_name || req.user.email || 'Unknown',
         message_text: messageText,
       })
-      .select('id, student_code, sender_role, sender_name, message_text, created_at')
+      .select('id, school_id, student_id, sender_role, sender_name, message_text, created_at')
       .single();
     if (error) throw error;
-    return res.status(201).json({ ok: true, data });
+    return res.status(201).json({ ok: true, data: { ...data, student_code: studentCode } });
   } catch (error) {
     console.error('Failed to send mobile chat message', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });

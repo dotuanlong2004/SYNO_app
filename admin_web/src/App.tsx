@@ -2438,8 +2438,20 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
 // ─── App: Auth Gate ──────────────────────────────────────────────────────────
 function App() {
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || null);
+  const [authToken, setAuthToken] = useState(() => {
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY) || null;
+    const savedRefreshToken = localStorage.getItem(AUTH_REFRESH_TOKEN_KEY) || null;
+    if (savedToken && !savedRefreshToken) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      return null;
+    }
+    return savedToken;
+  });
   const [authUser, setAuthUser]   = useState(() => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
+      return null;
+    }
     try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null'); } catch { return null; }
   });
 
