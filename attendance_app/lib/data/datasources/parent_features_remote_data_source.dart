@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/grade_record.dart';
+import '../../domain/entities/school_event_item.dart';
 
 class ParentFeaturesRemoteDataSource {
   ParentFeaturesRemoteDataSource({required Dio dio}) : _dio = dio;
@@ -91,6 +92,36 @@ class ParentFeaturesRemoteDataSource {
       throw Exception(serverMsg ?? 'Không thể tải thông báo (${e.type.name})');
     } catch (e) {
       throw Exception('Lỗi khi tải thông báo: $e');
+    }
+  }
+
+  Future<List<SchoolEventItem>> fetchEvents() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/events',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final rows = response.data?['data'];
+      if (rows is! List) return const <SchoolEventItem>[];
+      return rows.whereType<Map<String, dynamic>>().map((json) {
+        return SchoolEventItem(
+          id: (json['id'] as num?)?.toInt() ?? 0,
+          title: '${json['title'] ?? ''}',
+          content: '${json['content'] ?? ''}',
+          imageUrl: '${json['image_url'] ?? ''}',
+          eventDate: json['event_date'] == null
+              ? null
+              : DateTime.tryParse('${json['event_date']}'),
+          publishedAt: json['published_at'] == null
+              ? null
+              : DateTime.tryParse('${json['published_at']}'),
+        );
+      }).toList();
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(serverMsg ?? 'Không thể tải sự kiện (${e.type.name})');
+    } catch (e) {
+      throw Exception('Lỗi khi tải sự kiện: $e');
     }
   }
 

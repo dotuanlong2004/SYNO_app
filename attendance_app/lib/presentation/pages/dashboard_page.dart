@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/fee_notice.dart';
+import '../../domain/entities/school_event_item.dart';
 import '../../domain/entities/timetable_entry.dart';
 import '../providers/dashboard_providers.dart';
 import '../../domain/entities/student_link_info.dart';
@@ -1759,34 +1760,221 @@ class _FeeRow extends StatelessWidget {
 }
 
 // ─── Thông Báo / Sự Kiện ────────────────────────────────────────────────────
-enum _NewsFeedMode { announcements, events }
 
-class _EventsTab extends StatelessWidget {
+class _EventsTab extends ConsumerWidget {
   const _EventsTab();
 
   @override
-  Widget build(BuildContext context) {
-    return const _NewsTab(mode: _NewsFeedMode.events);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eventsAsync = ref.watch(eventsProvider);
+    return eventsAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return const _EmptyState(
+            icon: Icons.event_note_rounded,
+            message: 'Chưa có sự kiện',
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(eventsProvider);
+            await ref.read(eventsProvider.future);
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final date = item.eventDate ?? item.publishedAt;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x10000000),
+                      blurRadius: 14,
+                      offset: Offset(0, 5),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _showEventDetail(context, item),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (item.imageUrl.isNotEmpty)
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Image.network(
+                            item.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                                  color: AppTheme.brandSurface,
+                                  child: const Icon(
+                                    Icons.image_not_supported_rounded,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withAlpha(18),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Text(
+                                    'Sự kiện trường',
+                                    style: TextStyle(
+                                      color: AppTheme.primaryColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (date != null)
+                                  Text(
+                                    DateFormat('dd/MM/yyyy').format(date),
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              item.title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              item.content,
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 13,
+                                height: 1.45,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+      error: (e, _) => const _ErrorState(message: 'Không thể tải sự kiện'),
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryOrange),
+      ),
+    );
+  }
+
+  void _showEventDetail(BuildContext context, SchoolEventItem item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.68,
+        minChildSize: 0.35,
+        maxChildSize: 0.92,
+        builder: (_, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (item.imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(item.imageUrl, fit: BoxFit.cover),
+                ),
+              ),
+            const SizedBox(height: 16),
+            const Text(
+              'Sự kiện trường',
+              style: TextStyle(
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.title,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+            ),
+            if ((item.eventDate ?? item.publishedAt) != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                DateFormat(
+                  'dd/MM/yyyy HH:mm',
+                ).format((item.eventDate ?? item.publishedAt)!),
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              ),
+            ],
+            const Divider(height: 24),
+            Text(
+              item.content,
+              style: const TextStyle(fontSize: 15, height: 1.6),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 class _NewsTab extends ConsumerWidget {
-  const _NewsTab({this.mode = _NewsFeedMode.announcements});
+  const _NewsTab();
 
-  final _NewsFeedMode mode;
+  IconData get _feedIcon => Icons.campaign_rounded;
 
-  bool get _isEvents => mode == _NewsFeedMode.events;
+  String get _emptyMessage => 'Chưa có thông báo';
 
-  IconData get _feedIcon =>
-      _isEvents ? Icons.event_note_rounded : Icons.campaign_rounded;
+  String get _errorMessage => 'Không thể tải thông báo';
 
-  String get _emptyMessage =>
-      _isEvents ? 'Chưa có sự kiện' : 'Chưa có thông báo';
-
-  String get _errorMessage =>
-      _isEvents ? 'Không thể tải sự kiện' : 'Không thể tải thông báo';
-
-  String get _detailLabel => _isEvents ? 'Sự kiện' : 'Thông báo';
+  String get _detailLabel => 'Thông báo';
 
   String _priorityLabel(String priority) {
     switch (priority.toLowerCase()) {

@@ -114,6 +114,21 @@ router.get('/announcements', async (req, res) => {
   return res.json({ ok: true, data });
 });
 
+// GET /admin-web/events
+router.get('/events', async (req, res) => {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('school_events')
+    .select('*')
+    .eq('school_id', req.schoolId)
+    .order('published_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.json({ ok: true, data });
+});
+
 // GET /admin-web/grades
 router.get('/grades', async (req, res) => {
   const supabase = getSupabase();
@@ -597,6 +612,37 @@ router.post('/announcements', async (req, res) => {
   });
 });
 
+// POST /admin-web/events
+router.post('/events', async (req, res) => {
+  const supabase = getSupabase();
+  const title = String(req.body?.title || '').trim();
+  const content = String(req.body?.content || '').trim();
+  const imageUrl = String(req.body?.image_url || '').trim();
+  const eventDate = String(req.body?.event_date || '').trim();
+
+  if (!title || !content) {
+    return res.status(400).json({ ok: false, error: 'Tiêu đề và nội dung sự kiện không được để trống' });
+  }
+
+  const { data, error } = await supabase
+    .from('school_events')
+    .insert({
+      school_id: req.schoolId,
+      title,
+      content,
+      image_url: imageUrl || null,
+      event_date: eventDate || null,
+      created_by: req.user?.id || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.status(201).json({ ok: true, data });
+});
+
 // POST /admin-web/chat/messages
 router.post('/chat/messages', async (req, res) => {
   const supabase = getSupabase();
@@ -707,6 +753,22 @@ router.delete('/announcements/:id', async (req, res) => {
 
   const { error } = await supabase
     .from('announcements')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('school_id', req.schoolId);
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.json({ ok: true });
+});
+
+// DELETE /admin-web/events/:id
+router.delete('/events/:id', async (req, res) => {
+  const supabase = getSupabase();
+
+  const { error } = await supabase
+    .from('school_events')
     .delete()
     .eq('id', req.params.id)
     .eq('school_id', req.schoolId);

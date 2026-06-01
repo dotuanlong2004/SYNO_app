@@ -232,6 +232,13 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     is_general: true,
     send_notification: false,
   });
+  const [events, setEvents] = useState([]);
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    content: '',
+    event_date: '',
+    image_url: '',
+  });
   const [grades, setGrades] = useState([]);
   const [gradeForm, setGradeForm] = useState({
     student_code: '',
@@ -256,6 +263,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [timetableSearch, setTimetableSearch] = useState('');
   const [feeSearch, setFeeSearch] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
+  const [eventSearch, setEventSearch] = useState('');
   const [gradeSearch, setGradeSearch] = useState('');
   const [chatSearch, setChatSearch] = useState('');
 
@@ -301,15 +309,17 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       requestJson(`${ADMIN_WEB_API}/timetables`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/fees`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/announcements`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/events`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/chat/messages`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
     ])
-      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, gradesJson, chatJson, attendanceJson]) => {
+      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, eventsJson, gradesJson, chatJson, attendanceJson]) => {
         setStudents(studentsJson.data || []);
         setTimetables(timetablesJson.data || []);
         setFees(feesJson.data || []);
         setAnnouncements(announcementsJson.data || []);
+        setEvents(eventsJson.data || []);
         setGrades(gradesJson.data || []);
         setChatMessages(chatJson.data || []);
         setAttendanceLogs(attendanceJson.data || []);
@@ -467,6 +477,17 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
   }
 
+  async function loadEvents() {
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/events`, {
+        headers: adminHeaders,
+      });
+      setEvents(json.data || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   async function loadGrades() {
     try {
       const json = await requestJson(`${ADMIN_WEB_API}/grades`, {
@@ -548,6 +569,12 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       matchesTextSearch(item, announcementSearch, ['title', 'content'])
     );
   }, [announcements, announcementSearch]);
+
+  const filteredEvents = useMemo(() => {
+    return events.filter((item) =>
+      matchesTextSearch(item, eventSearch, ['title', 'content', 'image_url'])
+    );
+  }, [events, eventSearch]);
 
   const filteredGrades = useMemo(() => {
     return grades.filter((item) =>
@@ -1189,6 +1216,35 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
   }
 
+  async function createEvent(event) {
+    event.preventDefault();
+    setMessage('');
+    try {
+      await requestJson(`${ADMIN_WEB_API}/events`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(eventForm),
+      });
+      setEventForm({ title: '', content: '', event_date: '', image_url: '' });
+      await loadEvents();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function deleteEvent(id) {
+    if (!window.confirm('Xác nhận xóa sự kiện?')) return;
+    try {
+      await requestJson(`${ADMIN_WEB_API}/events/${id}`, {
+        method: 'DELETE',
+        headers: adminHeaders,
+      });
+      await loadEvents();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   async function createGrade(event) {
     event.preventDefault();
     setMessage('');
@@ -1293,6 +1349,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             ['timetable', 'Thời khóa biểu (Mon-Sat)'],
             ['fees', 'Học phí & Thu phí'],
             ['announcements', 'Thông báo'],
+            ['events', 'Sự kiện'],
             ['grades', 'Bảng điểm'],
             ['chat', 'Tin nhắn'],
             ['attendance', 'Điểm danh'],
@@ -2074,6 +2131,96 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               ))}
             </div>
             {filteredAnnouncements.length === 0 ? <EmptyState message="Chưa có thông báo phù hợp với bộ lọc." /> : null}
+          </section>
+        ) : null}
+
+        {tab === 'events' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Sự kiện và hoạt động trường</h2>
+                <p className="text-sm text-slate-500">
+                  Đăng hoạt động có ngày diễn ra và ảnh minh họa để phụ huynh xem trong tab Sự kiện.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadEvents}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Tải lại
+              </button>
+            </div>
+            <form onSubmit={createEvent} className="mb-4 grid gap-2">
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Tiêu đề sự kiện"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, title: e.target.value }))}
+                />
+                <input
+                  type="datetime-local"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={eventForm.event_date}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, event_date: e.target.value }))}
+                />
+              </div>
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="URL ảnh sự kiện (tùy chọn)"
+                value={eventForm.image_url}
+                onChange={(e) => setEventForm((prev) => ({ ...prev, image_url: e.target.value }))}
+              />
+              <textarea
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Nội dung sự kiện hoặc hoạt động"
+                rows={4}
+                value={eventForm.content}
+                onChange={(e) => setEventForm((prev) => ({ ...prev, content: e.target.value }))}
+              />
+              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+                Đăng sự kiện
+              </button>
+            </form>
+            <ModuleSearch
+              value={eventSearch}
+              onChange={setEventSearch}
+              placeholder="Tìm theo tiêu đề, nội dung hoặc ảnh sự kiện..."
+              count={filteredEvents.length}
+              total={events.length}
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              {filteredEvents.map((item) => (
+                <div key={item.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white text-sm shadow-sm">
+                  {item.image_url ? (
+                    <img src={item.image_url} alt="" className="h-40 w-full object-cover" />
+                  ) : (
+                    <div className="flex h-32 items-center justify-center bg-blue-50 text-blue-700">
+                      Sự kiện SYNO
+                    </div>
+                  )}
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <strong className="text-slate-950">{item.title}</strong>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {item.event_date ? new Date(item.event_date).toLocaleString('vi-VN') : 'Chưa đặt ngày diễn ra'}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => deleteEvent(item.id)}
+                        className="rounded bg-rose-100 px-2 py-1 text-rose-700"
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                    <p className="mt-2 line-clamp-3 text-slate-600">{item.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {filteredEvents.length === 0 ? <EmptyState message="Chưa có sự kiện phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 

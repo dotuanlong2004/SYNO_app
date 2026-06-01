@@ -259,6 +259,23 @@ router.get('/announcements', mobileAuth, async (req, res) => {
   }
 });
 
+router.get('/events', mobileAuth, async (req, res) => {
+  const schoolId = String(req.user?.school_id ?? '1');
+  try {
+    const { data, error } = await getSupabase()
+      .from('school_events')
+      .select('id, title, content, image_url, event_date, published_at')
+      .eq('school_id', schoolId)
+      .order('published_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return res.status(200).json({ ok: true, count: data.length, data });
+  } catch (error) {
+    console.error('Failed to fetch mobile events', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
 router.get('/grades', mobileAuth, async (req, res) => {
   const schoolId = String(req.user?.school_id ?? '1');
   const userRole = String(req.user?.role ?? '').toLowerCase();

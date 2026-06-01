@@ -26,6 +26,7 @@ import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/fee_notice.dart';
 import '../../domain/entities/grade_record.dart';
+import '../../domain/entities/school_event_item.dart';
 import '../../domain/entities/student_link_info.dart';
 import '../../domain/entities/timetable_entry.dart';
 import '../../domain/repositories/attendance_repository.dart';
@@ -320,6 +321,12 @@ final announcementsProvider = FutureProvider<List<AnnouncementItem>>((
   ref.watch(parentLearningDataRefreshTickProvider);
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchAnnouncements();
+});
+
+final eventsProvider = FutureProvider<List<SchoolEventItem>>((ref) async {
+  ref.watch(parentLearningDataRefreshTickProvider);
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchEvents();
 });
 
 final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
