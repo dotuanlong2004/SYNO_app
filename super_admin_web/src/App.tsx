@@ -11,6 +11,7 @@ import synoLogoMark from './assets/brand/syno-logo-mark.png';
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3000/api/v1';
 const PLATFORM_API = `${API_BASE}/platform-admin`;
 const AUTH_TOKEN_KEY = 'super_admin_web_token';
+const AUTH_REFRESH_TOKEN_KEY = 'super_admin_web_refresh_token';
 const AUTH_USER_KEY = 'super_admin_web_user';
 const TEST_PASSWORD = '123456';
 const API_CONNECTION_ERROR = 'Không thể kết nối đến backend SYNO. Hãy kiểm tra API server đang chạy ở http://127.0.0.1:3000.';
@@ -77,7 +78,9 @@ async function requestJson(url: string, options: RequestInit = {}) {
   }
   const json = await response.json().catch(() => null);
   if (!response.ok || !json?.ok) {
-    throw new Error(json?.error || `Request failed: HTTP ${response.status}`);
+    const error = new Error(json?.error || `Request failed: HTTP ${response.status}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
   return json;
 }
@@ -104,6 +107,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
         return;
       }
       localStorage.setItem(AUTH_TOKEN_KEY, json.access_token);
+      localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, json.refresh_token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(json.user));
       onLogin(json.access_token, json.user);
     } catch (error: any) {
@@ -136,7 +140,17 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: AuthUser) => 
   );
 }
 
-function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; onLogout: () => void }) {
+function AppShell({
+  token,
+  user,
+  onLogout,
+  onSessionRefresh,
+}: {
+  token: string;
+  user: AuthUser;
+  onLogout: () => void;
+  onSessionRefresh: (token: string, user: AuthUser) => void;
+}) {
   const [tab, setTab] = useState<'schools' | 'users' | 'audit'>('schools');
   const [schools, setSchools] = useState<School[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
@@ -171,6 +185,49 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
     Authorization: `Bearer ${token}`,
   }), [token]);
 
+  async function refreshSession() {
+    const refreshToken = localStorage.getItem(AUTH_REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      onLogout();
+      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+
+    const json = await requestJson(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    const role = String(json.user?.role || '').toLowerCase();
+    if (role !== 'super_admin') {
+      onLogout();
+      throw new Error('Tài khoản này không còn quyền truy cập cổng quản trị nền tảng.');
+    }
+
+    localStorage.setItem(AUTH_TOKEN_KEY, json.access_token);
+    localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, json.refresh_token);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(json.user));
+    onSessionRefresh(json.access_token, json.user);
+    return json.access_token;
+  }
+
+  async function authedRequestJson(url: string, options: RequestInit = {}) {
+    try {
+      return await requestJson(url, options);
+    } catch (error: any) {
+      if (error.status !== 401) {
+        throw error;
+      }
+      const nextToken = await refreshSession();
+      const retryHeaders = new Headers(options.headers);
+      retryHeaders.set('Authorization', `Bearer ${nextToken}`);
+      return requestJson(url, {
+        ...options,
+        headers: retryHeaders,
+      });
+    }
+  }
+
   const stats = useMemo(() => ({
     schools: schools.length,
     activeSchools: schools.filter((school) => school.status !== 'inactive').length,
@@ -201,9 +258,9 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
     setMessage('');
     try {
       const [schoolJson, userJson, auditJson] = await Promise.all([
-        requestJson(`${PLATFORM_API}/schools`, { headers }),
-        requestJson(`${PLATFORM_API}/admin-users`, { headers }),
-        requestJson(`${PLATFORM_API}/audit-logs`, { headers }),
+        authedRequestJson(`${PLATFORM_API}/schools`, { headers }),
+        authedRequestJson(`${PLATFORM_API}/admin-users`, { headers }),
+        authedRequestJson(`${PLATFORM_API}/audit-logs`, { headers }),
       ]);
       const nextSchools = schoolJson.data || [];
       setSchools(nextSchools);
@@ -231,7 +288,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
         ...schoolForm,
         education_levels: schoolForm.education_levels.split(',').map((item) => item.trim()).filter(Boolean),
       };
-      await requestJson(`${PLATFORM_API}/schools${editingSchoolId ? `/${editingSchoolId}` : ''}`, {
+      await authedRequestJson(`${PLATFORM_API}/schools${editingSchoolId ? `/${editingSchoolId}` : ''}`, {
         method: editingSchoolId ? 'PUT' : 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -268,7 +325,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
         school_id: role === 'super_admin' ? null : userForm.school_id,
         is_active: userForm.is_active,
       };
-      await requestJson(`${PLATFORM_API}/admin-users${editingUserId ? `/${editingUserId}` : ''}`, {
+      await authedRequestJson(`${PLATFORM_API}/admin-users${editingUserId ? `/${editingUserId}` : ''}`, {
         method: editingUserId ? 'PUT' : 'POST',
         headers,
         body: JSON.stringify(editingUserId ? payload : { ...payload, email: userForm.email, password: userForm.password || TEST_PASSWORD }),
@@ -296,7 +353,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
   }
 
   async function toggleUser(item: AdminUser) {
-    await requestJson(`${PLATFORM_API}/admin-users/${item.id}/status`, {
+    await authedRequestJson(`${PLATFORM_API}/admin-users/${item.id}/status`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({ is_active: item.is_active === false }),
@@ -306,7 +363,7 @@ function AppShell({ token, user, onLogout }: { token: string; user: AuthUser; on
 
   async function resetPassword(event: FormEvent) {
     event.preventDefault();
-    await requestJson(`${PLATFORM_API}/admin-users/${resetForm.user_id}/password`, {
+    await authedRequestJson(`${PLATFORM_API}/admin-users/${resetForm.user_id}/password`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({ password: resetForm.password || TEST_PASSWORD }),
@@ -550,6 +607,7 @@ export default function App() {
 
   function handleLogout() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
     setToken('');
     setUser(null);
@@ -559,5 +617,12 @@ export default function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  return <AppShell token={token} user={user} onLogout={handleLogout} />;
+  return (
+    <AppShell
+      token={token}
+      user={user}
+      onLogout={handleLogout}
+      onSessionRefresh={handleLogin}
+    />
+  );
 }

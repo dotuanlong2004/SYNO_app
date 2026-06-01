@@ -9,11 +9,6 @@ const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
 
 const router = express.Router();
-function debugLog(runId, hypothesisId, location, message, data) {
-  // #region agent log
-  fetch('http://127.0.0.1:7700/ingest/a7bdf355-c458-4118-93ed-045b1b863a17',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dd0f3d'},body:JSON.stringify({sessionId:'dd0f3d',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-}
 
 function schoolIdOf(req) {
   return String(req.user?.school_id ?? req.get('x-school-id') ?? '1').trim();
@@ -33,21 +28,11 @@ router.get('/students', mobileAuth, async (req, res) => {
   const supabase = getSupabase();
 
   try {
-    debugLog('pre-fix', 'H1', 'src/routes/students.js:/students[GET]', 'Students endpoint start', {
-      role: req.user?.role || null,
-      schoolId,
-    });
     const { data: rows, error } = await supabase
       .from('students')
       .select('id, student_code, full_name, class_name, link_code, parent_id')
       .eq('school_id', schoolId)
       .order('student_code', { ascending: true });
-    debugLog('pre-fix', 'H2', 'src/routes/students.js:/students[GET]', 'Students query result', {
-      hasError: !!error,
-      errorMessage: error?.message || null,
-      errorCode: error?.code || null,
-      rowCount: Array.isArray(rows) ? rows.length : null,
-    });
 
     if (error) throw error;
 
@@ -58,12 +43,6 @@ router.get('/students', mobileAuth, async (req, res) => {
         .from('user_profiles')
         .select('id, full_name')
         .in('id', parentIds);
-      debugLog('post-fix', 'H4', 'src/routes/students.js:/students[GET]', 'Parent profile lookup result', {
-        parentIdCount: parentIds.length,
-        hasError: !!parentError,
-        errorMessage: parentError?.message || null,
-        profileCount: Array.isArray(parentProfiles) ? parentProfiles.length : null,
-      });
       if (parentError) throw parentError;
       parentNameById = Object.fromEntries((parentProfiles || []).map((p) => [p.id, p.full_name]));
     }
@@ -83,12 +62,6 @@ router.get('/students', mobileAuth, async (req, res) => {
       })),
     });
   } catch (error) {
-    debugLog('pre-fix', 'H3', 'src/routes/students.js:/students[GET]', 'Students endpoint exception', {
-      message: error?.message || 'unknown',
-      code: error?.code || null,
-      details: error?.details || null,
-      hint: error?.hint || null,
-    });
     console.error('Failed to fetch students list', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }

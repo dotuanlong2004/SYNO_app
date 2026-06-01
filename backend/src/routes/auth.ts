@@ -14,11 +14,6 @@ const LEGACY_TEST_LOGIN_ALIAS = {
   'parent@test.com': 'parent2@test.com',
   '0123456789': 'long.parent@test.com',
 };
-function debugLog(runId, hypothesisId, location, message, data) {
-  // #region agent log
-  fetch('http://127.0.0.1:7700/ingest/a7bdf355-c458-4118-93ed-045b1b863a17',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dd0f3d'},body:JSON.stringify({sessionId:'dd0f3d',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-}
 
 function formatUserResponse(authUser, profile) {
   return {
@@ -45,35 +40,15 @@ router.post('/login', async (req, res) => {
   }
 
   const supabase = getSupabaseAnon() || getSupabase();
-  debugLog('pre-fix', 'H1', 'src/routes/auth.js:/login', 'Login request received', {
-    hasAnonClient: !!getSupabaseAnon(),
-    emailDomain: email.includes('@') ? email.split('@')[1] : null,
-    passwordLength: password.length,
-  });
 
   try {
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    debugLog('pre-fix', 'H2', 'src/routes/auth.js:/login', 'signInWithPassword result', {
-      hasError: !!error,
-      errorMessage: error?.message || null,
-      hasUser: !!data?.user,
-      hasSession: !!data?.session,
-    });
 
     const aliasEmail = LEGACY_TEST_LOGIN_ALIAS[email];
     if ((error || !data?.user) && aliasEmail) {
-      debugLog('post-fix', 'H5', 'src/routes/auth.js:/login', 'Attempting legacy account alias fallback', {
-        fromEmail: email,
-        toEmail: aliasEmail,
-      });
       const retry = await supabase.auth.signInWithPassword({ email: aliasEmail, password });
       data = retry.data;
       error = retry.error;
-      debugLog('post-fix', 'H6', 'src/routes/auth.js:/login', 'Alias fallback result', {
-        hasError: !!error,
-        errorMessage: error?.message || null,
-        hasUser: !!data?.user,
-      });
     }
 
     if (error || !data?.user) {
@@ -85,10 +60,6 @@ router.post('/login', async (req, res) => {
       .select('*')
       .eq('id', data.user.id)
       .single();
-    debugLog('pre-fix', 'H3', 'src/routes/auth.js:/login', 'user_profiles query completed', {
-      userIdPresent: !!data?.user?.id,
-      profileFound: !!profile,
-    });
 
     let enrichedProfile = profile || null;
     const resolvedRole = profile?.role || data.user.user_metadata?.role || 'parent';
@@ -123,10 +94,6 @@ router.post('/login', async (req, res) => {
       user: formatUserResponse(data.user, enrichedProfile),
     });
   } catch (error) {
-    debugLog('pre-fix', 'H4', 'src/routes/auth.js:/login', 'Unhandled login exception', {
-      message: error?.message || 'unknown',
-      name: error?.name || 'unknown',
-    });
     console.error('Login failed', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }

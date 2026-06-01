@@ -18,6 +18,7 @@ const HEALTH_API = API_BASE.replace(/\/api\/v1\/?$/, '/health');
 const DEFAULT_SCHOOL_ID = import.meta.env.VITE_DEFAULT_SCHOOL_ID || '1';
 const ADMIN_WEB_API = `${API_BASE}/admin-web`;
 const AUTH_TOKEN_KEY = 'admin_web_token';
+const AUTH_REFRESH_TOKEN_KEY = 'admin_web_refresh_token';
 const AUTH_USER_KEY  = 'admin_web_user';
 const API_CONNECTION_ERROR = 'Không thể kết nối đến backend SYNO. Hãy kiểm tra API server đang chạy ở http://127.0.0.1:3000.';
 
@@ -50,6 +51,7 @@ function LoginScreen({ onLogin }) {
         return;
       }
       localStorage.setItem(AUTH_TOKEN_KEY, json.access_token);
+      localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, json.refresh_token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(json.user));
       onLogin(json.access_token, json.user);
     } catch {
@@ -171,7 +173,7 @@ function EmptyState({ message }) {
 }
 
 // ─── AppShell: Toàn bộ Admin UI (chỉ render khi đã đăng nhập) ──────────────
-function AppShell({ authToken, authUser, onLogout }) {
+function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [tab, setTab] = useState('students');
   const schoolId = String(authUser.school_id || DEFAULT_SCHOOL_ID);
   const [students, setStudents] = useState([]);
@@ -315,7 +317,41 @@ function AppShell({ authToken, authUser, onLogout }) {
       });
   }, [adminHeaders]);
 
-  async function requestJson(url, options = {}) {
+  async function refreshSession() {
+    const refreshToken = localStorage.getItem(AUTH_REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      onLogout();
+      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+
+    let response;
+    try {
+      response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+    } catch {
+      throw new Error(API_CONNECTION_ERROR);
+    }
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.ok) {
+      onLogout();
+      throw new Error(json?.error || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+    const role = String(json.user?.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'teacher') {
+      onLogout();
+      throw new Error('Tài khoản này không còn quyền truy cập trang quản trị trường.');
+    }
+    localStorage.setItem(AUTH_TOKEN_KEY, json.access_token);
+    localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, json.refresh_token);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(json.user));
+    onSessionRefresh(json.access_token, json.user);
+    return json.access_token;
+  }
+
+  async function requestJson(url: string, options: any = {}, retrying = false) {
     let response;
     try {
       response = await fetch(url, options);
@@ -336,6 +372,21 @@ function AppShell({ authToken, authUser, onLogout }) {
       json = JSON.parse(text);
     } catch {
       throw new Error(`Phản hồi JSON không hợp lệ từ ${url} (HTTP ${response.status}).`);
+    }
+
+    if (response.status === 401 && !retrying && options?.headers?.Authorization) {
+      const nextToken = await refreshSession();
+      return requestJson(
+        url,
+        {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${nextToken}`,
+          },
+        },
+        true,
+      );
     }
 
     if (!response.ok) {
@@ -2399,6 +2450,7 @@ function App() {
 
   function handleLogout() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
     setAuthToken(null);
     setAuthUser(null);
@@ -2408,7 +2460,14 @@ function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  return <AppShell authToken={authToken} authUser={authUser} onLogout={handleLogout} />;
+  return (
+    <AppShell
+      authToken={authToken}
+      authUser={authUser}
+      onLogout={handleLogout}
+      onSessionRefresh={handleLogin}
+    />
+  );
 }
 
 export default App;

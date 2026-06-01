@@ -40,12 +40,6 @@ function toVietnamParts(input) {
   };
 }
 
-function debugLog(runId, hypothesisId, location, message, data) {
-  // #region agent log
-  fetch('http://127.0.0.1:7700/ingest/a7bdf355-c458-4118-93ed-045b1b863a17',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dd0f3d'},body:JSON.stringify({sessionId:'dd0f3d',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-}
-
 router.get('/attendance', mobileAuth, async (req, res) => {
   const schoolId = String(req.user?.school_id ?? '1');
   const userRole = String(req.user?.role ?? '').toLowerCase();
@@ -58,12 +52,6 @@ router.get('/attendance', mobileAuth, async (req, res) => {
   const supabase = getSupabase();
 
   try {
-    debugLog('pre-fix', 'H5', 'src/routes/data.js:/attendance', 'Attendance endpoint start', {
-      schoolId,
-      requestedLimit: requested,
-      effectiveLimit: limit,
-      userRole: req.user?.role || null,
-    });
     // Tính mốc 6AM VN (UTC+7) của ngày hôm nay → UTC
     const nowVN = new Date(Date.now() + 7 * 60 * 60 * 1000);
     const todayVN = new Date(Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate(), 0, 0, 0));
@@ -89,11 +77,6 @@ router.get('/attendance', mobileAuth, async (req, res) => {
     }
 
     const { data: rows, error } = await query;
-    debugLog('pre-fix', 'H6', 'src/routes/data.js:/attendance', 'Attendance select result', {
-      hasError: !!error,
-      errorMessage: error?.message || null,
-      rowCount: Array.isArray(rows) ? rows.length : null,
-    });
 
     if (error) throw error;
 
@@ -117,11 +100,6 @@ router.get('/attendance', mobileAuth, async (req, res) => {
       }),
     });
   } catch (error) {
-    debugLog('pre-fix', 'H7', 'src/routes/data.js:/attendance', 'Attendance handler exception', {
-      message: error?.message || 'unknown',
-      name: error?.name || 'unknown',
-      details: error?.details || null,
-    });
     console.error('Failed to fetch attendance data', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
