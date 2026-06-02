@@ -317,6 +317,25 @@ function FieldLabel({ children }) {
   return <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">{children}</label>;
 }
 
+const GRADE_LEVELS = Array.from({ length: 12 }, (_, index) => String(index + 1));
+
+function getGradeLevel(className) {
+  const match = String(className || '').match(/\d+/);
+  if (!match) return '';
+  const value = Number(match[0]);
+  return value >= 1 && value <= 12 ? String(value) : '';
+}
+
+function firstGradeWithClasses(classes) {
+  return GRADE_LEVELS.find((grade) => classes.some((className) => getGradeLevel(className) === grade)) || '';
+}
+
+function sortClassName(a, b) {
+  const gradeDiff = Number(getGradeLevel(a) || 999) - Number(getGradeLevel(b) || 999);
+  if (gradeDiff !== 0) return gradeDiff;
+  return String(a || '').localeCompare(String(b || ''), 'vi', { numeric: true });
+}
+
 // ─── AppShell: Toàn bộ Admin UI (chỉ render khi đã đăng nhập) ──────────────
 function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [tab, setTab] = useState('students');
@@ -405,11 +424,19 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   });
   // Student search
   const [studentSearch, setStudentSearch] = useState('');
+  const [studentGradeFilter, setStudentGradeFilter] = useState('');
+  const [studentClassFilter, setStudentClassFilter] = useState('');
   const [timetableSearch, setTimetableSearch] = useState('');
   const [feeSearch, setFeeSearch] = useState('');
+  const [feeGradeFilter, setFeeGradeFilter] = useState('');
+  const [feeClassFilter, setFeeClassFilter] = useState('');
+  const [feeStudentCodeFilter, setFeeStudentCodeFilter] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
   const [eventSearch, setEventSearch] = useState('');
   const [gradeSearch, setGradeSearch] = useState('');
+  const [gradeGradeFilter, setGradeGradeFilter] = useState('');
+  const [gradeClassFilter, setGradeClassFilter] = useState('');
+  const [gradeStudentCodeFilter, setGradeStudentCodeFilter] = useState('');
   const [chatSearch, setChatSearch] = useState('');
   const [apiImportForms, setApiImportForms] = useState({
     students: { url: '', api_key: '' },
@@ -781,6 +808,122 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     );
   }, [grades, gradeSearch]);
 
+  const studentByCode = useMemo(() => {
+    const values = new Map();
+    students.forEach((student) => {
+      if (student.student_code) values.set(student.student_code, student);
+    });
+    return values;
+  }, [students]);
+
+  const studentClassOptions = useMemo(() => {
+    const values = new Set(students.map((student) => student.class_name));
+    return Array.from(values).filter(Boolean).sort(sortClassName);
+  }, [students]);
+
+  const feeClassOptions = useMemo(() => {
+    const values = new Set([
+      ...students.map((student) => student.class_name),
+      ...fees.map((item) => item.class_id),
+    ]);
+    return Array.from(values).filter(Boolean).sort(sortClassName);
+  }, [students, fees]);
+
+  const gradeClassOptions = useMemo(() => {
+    const values = new Set(students.map((student) => student.class_name));
+    grades.forEach((item) => {
+      const student = studentByCode.get(item.student_code);
+      if (student?.class_name) values.add(student.class_name);
+    });
+    return Array.from(values).filter(Boolean).sort(sortClassName);
+  }, [students, grades, studentByCode]);
+
+  const activeStudentGrade = studentGradeFilter || firstGradeWithClasses(studentClassOptions);
+  const studentClassesInGrade = useMemo(
+    () => studentClassOptions.filter((className) => getGradeLevel(className) === activeStudentGrade),
+    [studentClassOptions, activeStudentGrade],
+  );
+  const activeStudentClass =
+    studentClassFilter && getGradeLevel(studentClassFilter) === activeStudentGrade
+      ? studentClassFilter
+      : studentClassesInGrade[0] || '';
+  const displayedStudents = useMemo(() => {
+    return filteredStudents.filter((student) => !activeStudentClass || student.class_name === activeStudentClass);
+  }, [filteredStudents, activeStudentClass]);
+
+  const activeFeeGrade = feeGradeFilter || firstGradeWithClasses(feeClassOptions);
+  const feeClassesInGrade = useMemo(
+    () => feeClassOptions.filter((className) => getGradeLevel(className) === activeFeeGrade),
+    [feeClassOptions, activeFeeGrade],
+  );
+  const activeFeeClass =
+    feeClassFilter && getGradeLevel(feeClassFilter) === activeFeeGrade ? feeClassFilter : feeClassesInGrade[0] || '';
+  const feeStudentsInClass = useMemo(() => {
+    const values = new Map();
+    students
+      .filter((student) => !activeFeeClass || student.class_name === activeFeeClass)
+      .forEach((student) => {
+        if (student.student_code) values.set(student.student_code, student);
+      });
+    fees
+      .filter((item) => !activeFeeClass || item.class_id === activeFeeClass)
+      .forEach((item) => {
+        if (!item.student_code || values.has(item.student_code)) return;
+        values.set(item.student_code, {
+          student_code: item.student_code,
+          full_name: '',
+          class_name: item.class_id,
+        });
+      });
+    return Array.from(values.values()).sort((a, b) =>
+      String(a.student_code || '').localeCompare(String(b.student_code || ''), 'vi', { numeric: true }),
+    );
+  }, [students, fees, activeFeeClass]);
+  const activeFeeStudentCode =
+    feeStudentCodeFilter && feeStudentsInClass.some((student) => student.student_code === feeStudentCodeFilter)
+      ? feeStudentCodeFilter
+      : feeStudentsInClass[0]?.student_code || '';
+  const displayedFees = useMemo(() => {
+    return filteredFees.filter((item) => {
+      const student = studentByCode.get(item.student_code);
+      const className = item.class_id || student?.class_name || '';
+      return (!activeFeeClass || className === activeFeeClass) && (!activeFeeStudentCode || item.student_code === activeFeeStudentCode);
+    });
+  }, [filteredFees, studentByCode, activeFeeClass, activeFeeStudentCode]);
+
+  const activeGradeGrade = gradeGradeFilter || firstGradeWithClasses(gradeClassOptions);
+  const gradeClassesInGrade = useMemo(
+    () => gradeClassOptions.filter((className) => getGradeLevel(className) === activeGradeGrade),
+    [gradeClassOptions, activeGradeGrade],
+  );
+  const activeGradeClass =
+    gradeClassFilter && getGradeLevel(gradeClassFilter) === activeGradeGrade
+      ? gradeClassFilter
+      : gradeClassesInGrade[0] || '';
+  const gradeStudentsInClass = useMemo(() => {
+    const values = new Map();
+    students
+      .filter((student) => !activeGradeClass || student.class_name === activeGradeClass)
+      .forEach((student) => {
+        if (student.student_code) values.set(student.student_code, student);
+      });
+    grades.forEach((item) => {
+      const student = studentByCode.get(item.student_code);
+      if (!student || (activeGradeClass && student.class_name !== activeGradeClass) || values.has(item.student_code)) return;
+      values.set(item.student_code, student);
+    });
+    return Array.from(values.values()).sort((a, b) =>
+      String(a.student_code || '').localeCompare(String(b.student_code || ''), 'vi', { numeric: true }),
+    );
+  }, [students, grades, studentByCode, activeGradeClass]);
+  const activeGradeStudentCode =
+    gradeStudentCodeFilter && gradeStudentsInClass.some((student) => student.student_code === gradeStudentCodeFilter)
+      ? gradeStudentCodeFilter
+      : gradeStudentsInClass[0]?.student_code || '';
+  const displayedGrades = useMemo(() => {
+    return filteredGrades.filter((item) => !activeGradeStudentCode || item.student_code === activeGradeStudentCode);
+  }, [filteredGrades, activeGradeStudentCode]);
+
   const filteredChatMessages = useMemo(() => {
     return chatMessages.filter((item) =>
       matchesTextSearch(item, chatSearch, ['student_code', 'sender_role', 'sender_name', 'message_text'])
@@ -1144,6 +1287,113 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             {loading ? 'Đang nhập...' : 'Nhập qua API'}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  function renderHierarchyNavigator({
+    title,
+    grade,
+    classes,
+    activeClass,
+    onGradeChange,
+    onClassChange,
+    studentsInClass = [],
+    activeStudentCode = '',
+    onStudentChange,
+  }) {
+    const classCountByGrade = classes.reduce((acc, className) => {
+      const level = getGradeLevel(className);
+      if (level) acc[level] = (acc[level] || 0) + 1;
+      return acc;
+    }, {});
+
+    return (
+      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+          <div className="text-xs text-slate-500">
+            {activeClass ? `Đang xem lớp ${activeClass}` : 'Chưa có lớp để hiển thị'}
+            {activeStudentCode ? ` • ${activeStudentCode}` : ''}
+          </div>
+        </div>
+        <div className="mb-3">
+          <div className="mb-1 text-xs font-semibold uppercase text-slate-500">Khối</div>
+          <div className="flex flex-wrap gap-2">
+            {GRADE_LEVELS.map((level) => {
+              const disabled = !classCountByGrade[level];
+              const active = grade === level;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onGradeChange(level)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    active
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : disabled
+                        ? 'bg-white text-slate-300 ring-1 ring-slate-200'
+                        : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  Khối {level}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase text-slate-500">Lớp</div>
+          <div className="flex flex-wrap gap-2">
+            {classes
+              .filter((className) => getGradeLevel(className) === grade)
+              .map((className) => (
+                <button
+                  key={className}
+                  type="button"
+                  onClick={() => onClassChange(className)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    activeClass === className
+                      ? 'bg-slate-950 text-white'
+                      : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {className}
+                </button>
+              ))}
+            {classes.filter((className) => getGradeLevel(className) === grade).length === 0 ? (
+              <span className="rounded-lg bg-white px-3 py-2 text-sm text-slate-400 ring-1 ring-slate-200">
+                Chưa có lớp trong khối này
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {onStudentChange ? (
+          <div className="mt-3">
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-500">Học sinh</div>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {studentsInClass.map((student) => (
+                <button
+                  key={student.student_code}
+                  type="button"
+                  onClick={() => onStudentChange(student)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                    activeStudentCode === student.student_code
+                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50'
+                  }`}
+                >
+                  <div className="font-semibold">{student.student_code}</div>
+                  <div className="text-xs text-slate-500">{student.full_name || 'Chưa có tên học sinh'}</div>
+                </button>
+              ))}
+            </div>
+            {studentsInClass.length === 0 ? (
+              <EmptyState message="Chưa có học sinh trong lớp đang chọn." />
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -1929,27 +2179,25 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               )}
             </div>
 
-            {/* ── Tìm kiếm học sinh ── */}
-            <div className="mb-3 flex items-center gap-2">
-              <input
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="🔍 Tìm theo mã, họ tên hoặc lớp..."
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-              />
-              {studentSearch && (
-                <button
-                  type="button"
-                  onClick={() => setStudentSearch('')}
-                  className="rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600"
-                >
-                  Xóa
-                </button>
-              )}
-              <span className="text-sm text-slate-400">
-                {filteredStudents.length}/{students.length}
-              </span>
-            </div>
+            {renderHierarchyNavigator({
+              title: 'Xem học sinh theo khối và lớp',
+              grade: activeStudentGrade,
+              classes: studentClassOptions,
+              activeClass: activeStudentClass,
+              onGradeChange: (level) => {
+                setStudentGradeFilter(level);
+                setStudentClassFilter('');
+              },
+              onClassChange: setStudentClassFilter,
+            })}
+
+            <ModuleSearch
+              value={studentSearch}
+              onChange={setStudentSearch}
+              placeholder="Tìm trong lớp đang chọn theo mã, họ tên hoặc phụ huynh..."
+              count={displayedStudents.length}
+              total={students.length}
+            />
 
             {loading ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">Đang tải dữ liệu...</p> : null}
             <div className="overflow-x-auto">
@@ -1964,7 +2212,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStudents.map((student) => (
+                  {displayedStudents.map((student) => (
                     <tr key={student.id} className="border-b">
                       <td className="py-2">{student.student_code}</td>
                       <td className="py-2">{student.full_name}</td>
@@ -1991,7 +2239,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 </tbody>
               </table>
             </div>
-            {!loading && filteredStudents.length === 0 ? <EmptyState message="Chưa có học sinh phù hợp với bộ lọc." /> : null}
+            {!loading && displayedStudents.length === 0 ? <EmptyState message="Chưa có học sinh trong lớp hoặc bộ lọc hiện tại." /> : null}
           </section>
         ) : null}
 
@@ -2500,14 +2748,43 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 </button>
               ) : null}
             </form>
+            {renderHierarchyNavigator({
+              title: 'Xem khoản phí theo khối, lớp và học sinh',
+              grade: activeFeeGrade,
+              classes: feeClassOptions,
+              activeClass: activeFeeClass,
+              onGradeChange: (level) => {
+                setFeeGradeFilter(level);
+                setFeeClassFilter('');
+                setFeeStudentCodeFilter('');
+                setSelectedFee(null);
+              },
+              onClassChange: (className) => {
+                setFeeClassFilter(className);
+                setFeeStudentCodeFilter('');
+                setSelectedFee(null);
+                setFeeForm((prev) => ({ ...prev, class_id: className }));
+              },
+              studentsInClass: feeStudentsInClass,
+              activeStudentCode: activeFeeStudentCode,
+              onStudentChange: (student) => {
+                setFeeStudentCodeFilter(student.student_code);
+                setSelectedFee(null);
+                setFeeForm((prev) => ({
+                  ...prev,
+                  student_code: student.student_code,
+                  class_id: student.class_name || activeFeeClass,
+                }));
+              },
+            })}
             <ModuleSearch
               value={feeSearch}
               onChange={setFeeSearch}
               placeholder="Tìm theo mã học sinh, lớp, trạng thái, phương thức, khoản thu, số tiền..."
-              count={filteredFees.length}
+              count={displayedFees.length}
               total={fees.length}
             />
-            {selectedFee ? (
+            {selectedFee && (!activeFeeStudentCode || selectedFee.student_code === activeFeeStudentCode) ? (
               <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-slate-700">
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <div>
@@ -2549,7 +2826,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               </div>
             ) : null}
             <div className="space-y-2">
-              {filteredFees.map((f) => (
+              {displayedFees.map((f) => (
                 <div
                   key={f.id}
                   onClick={() => setSelectedFee(f)}
@@ -2597,7 +2874,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 </div>
               ))}
             </div>
-            {filteredFees.length === 0 ? <EmptyState message="Chưa có khoản phí phù hợp với bộ lọc." /> : null}
+            {displayedFees.length === 0 ? <EmptyState message="Chưa có khoản phí cho học sinh hoặc bộ lọc hiện tại." /> : null}
 
             {renderApiImportPanel('fees', 'Nhập học phí và khoản thu qua API', loadFees)}
 
@@ -2927,15 +3204,36 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 Thêm điểm
               </button>
             </form>
+            {renderHierarchyNavigator({
+              title: 'Xem bảng điểm theo khối, lớp và học sinh',
+              grade: activeGradeGrade,
+              classes: gradeClassOptions,
+              activeClass: activeGradeClass,
+              onGradeChange: (level) => {
+                setGradeGradeFilter(level);
+                setGradeClassFilter('');
+                setGradeStudentCodeFilter('');
+              },
+              onClassChange: (className) => {
+                setGradeClassFilter(className);
+                setGradeStudentCodeFilter('');
+              },
+              studentsInClass: gradeStudentsInClass,
+              activeStudentCode: activeGradeStudentCode,
+              onStudentChange: (student) => {
+                setGradeStudentCodeFilter(student.student_code);
+                setGradeForm((prev) => ({ ...prev, student_code: student.student_code }));
+              },
+            })}
             <ModuleSearch
               value={gradeSearch}
               onChange={setGradeSearch}
               placeholder="Tìm theo mã học sinh, môn học, học kỳ..."
-              count={filteredGrades.length}
+              count={displayedGrades.length}
               total={grades.length}
             />
             <div className="space-y-2">
-              {filteredGrades.map((item) => (
+              {displayedGrades.map((item) => (
                 <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div>
@@ -2954,7 +3252,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 </div>
               ))}
             </div>
-            {filteredGrades.length === 0 ? <EmptyState message="Chưa có bảng điểm phù hợp với bộ lọc." /> : null}
+            {displayedGrades.length === 0 ? <EmptyState message="Chưa có bảng điểm cho học sinh hoặc bộ lọc hiện tại." /> : null}
 
             {renderApiImportPanel('grades', 'Nhập bảng điểm qua API', loadGrades)}
 
