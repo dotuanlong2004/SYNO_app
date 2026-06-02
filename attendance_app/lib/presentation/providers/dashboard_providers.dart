@@ -79,7 +79,7 @@ class AuthController extends Notifier<AuthState> {
   Future<void> _initialize() async {
     final tokenStorage = ref.read(tokenStorageProvider);
     final stored = await tokenStorage.read().timeout(
-      const Duration(seconds: 1),
+      const Duration(seconds: 5),
       onTimeout: () => null,
     );
     if (stored == null) {
@@ -91,19 +91,42 @@ class AuthController extends Notifier<AuthState> {
 
     // Đọc user profile đã lưu (có role đúng) thay vì decode JWT Supabase
     final restoredUser = await tokenStorage.readUser().timeout(
-      const Duration(seconds: 1),
+      const Duration(seconds: 5),
       onTimeout: () => null,
     );
 
     if (restoredUser == null || restoredUser.id.isEmpty) {
-      // Fallback: chưa có user trong storage (session cũ trước khi update)
-      // Xóa token cũ để buộc đăng nhập lại
-      await tokenStorage.clear();
-      state = const AuthState.unauthenticated();
-      return;
+      try {
+        final current = await ref
+            .read(authApiProvider)
+            .currentUser()
+            .timeout(const Duration(seconds: 8));
+        await tokenStorage.saveUser(current);
+        state = AuthState.authenticated(current);
+        _initializeFcm();
+        return;
+      } catch (_) {
+        await tokenStorage.clear();
+        state = const AuthState.unauthenticated();
+        return;
+      }
     }
 
     state = AuthState.authenticated(restoredUser);
+    Future<void>.microtask(() async {
+      try {
+        final current = await ref
+            .read(authApiProvider)
+            .currentUser()
+            .timeout(const Duration(seconds: 8));
+        await tokenStorage.saveUser(current);
+        if (ref.read(authControllerProvider).isAuthenticated) {
+          state = AuthState.authenticated(current);
+        }
+      } catch (_) {
+        // Giữ phiên đã lưu; interceptor sẽ refresh token khi API trả 401.
+      }
+    });
     _initializeFcm();
   }
 

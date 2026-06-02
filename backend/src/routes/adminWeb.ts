@@ -755,7 +755,8 @@ router.post('/events/upload-image', async (req, res) => {
   }
 
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  const fileName = `${req.schoolId}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}-${originalName}.${extension}`;
+  const baseName = path.basename(originalName, path.extname(originalName)) || 'event-image';
+  const fileName = `${req.schoolId}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}-${baseName}.${extension}`;
   const filePath = path.join(UPLOAD_DIR, fileName);
   await fs.writeFile(filePath, buffer);
   return res.status(201).json({

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../core/network/api_config.dart';
 import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/event_comment.dart';
@@ -12,6 +13,32 @@ class ParentFeaturesRemoteDataSource {
   final Dio _dio;
 
   int _parseInt(dynamic value) => int.tryParse('${value ?? ''}') ?? 0;
+
+  String _backendAssetUrl(dynamic value) {
+    final raw = '${value ?? ''}'.trim();
+    if (raw.isEmpty) return '';
+
+    final base = Uri.parse(ApiConfig.baseUrl);
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return raw;
+
+    if (!uri.hasScheme) {
+      return base.resolve(raw).toString();
+    }
+
+    if ((uri.host == '127.0.0.1' || uri.host == 'localhost') &&
+        base.host != uri.host) {
+      return uri
+          .replace(
+            scheme: base.scheme,
+            host: base.host,
+            port: base.hasPort ? base.port : null,
+          )
+          .toString();
+    }
+
+    return raw;
+  }
 
   ChatMessage _parseChatMessage(Map<String, dynamic> json) {
     return ChatMessage(
@@ -111,7 +138,7 @@ class ParentFeaturesRemoteDataSource {
           id: _parseInt(json['id']),
           title: '${json['title'] ?? ''}',
           content: '${json['content'] ?? ''}',
-          imageUrl: '${json['image_url'] ?? ''}',
+          imageUrl: _backendAssetUrl(json['image_url']),
           eventDate: json['event_date'] == null
               ? null
               : DateTime.tryParse('${json['event_date']}'),

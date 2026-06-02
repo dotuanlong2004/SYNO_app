@@ -50,6 +50,19 @@ class AuthApi {
     );
   }
 
+  Future<AuthUser> currentUser() async {
+    final response = await _dio.get<Map<String, dynamic>>('/api/v1/auth/me');
+    final data = response.data ?? <String, dynamic>{};
+    final userMap =
+        (data['user'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    return AuthUser(
+      id: '${userMap['id'] ?? ''}',
+      email: '${userMap['email'] ?? ''}',
+      fullName: '${userMap['full_name'] ?? ''}',
+      role: '${userMap['role'] ?? 'parent'}',
+    );
+  }
+
   Future<ParentRegistrationResult> registerParent({
     required String fullName,
     required String emailOrPhone,
