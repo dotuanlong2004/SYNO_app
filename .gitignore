@@ -26,6 +26,7 @@ pgdata/
 backend/pgdata/
 postgres-data/
 redis-data/
+uploads/
 
 backend/firebase-service-account.json
 zk-agent/agent-buffer.sqlite

@@ -7,6 +7,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 const { checkSupabaseHealth } = require('./config/supabase');
 const { mobileRouter } = require('./routes/mobile');
 const { authRouter } = require('./routes/auth');
@@ -26,7 +27,8 @@ function createApp() {
 
   app.use(helmet());
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '8mb' }));
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   app.get('/health', async (req, res) => {
     const checks: { ok: boolean; supabase: string; queue: string; error?: string } = {

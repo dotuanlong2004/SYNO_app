@@ -220,6 +220,48 @@ function formatLooseCurrency(value) {
   return formatCurrency(String(value ?? 0));
 }
 
+function parseLooseAmount(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return NaN;
+  const numeric = raw
+    .replace(/[^\d,.-]/g, '')
+    .replace(/[.,](?=\d{3}(\D|$))/g, '')
+    .replace(',', '.');
+  return Number(numeric);
+}
+
+function parseFeeLines(text) {
+  const result = {};
+  String(text || '')
+    .split(/\r?\n|,/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      let label = '';
+      let value = '';
+      if (/[:=]/.test(line)) {
+        const [rawLabel, ...rest] = line.split(/[:=]/);
+        label = String(rawLabel || '').trim();
+        value = rest.join(':').trim();
+      } else {
+        const match = line.match(/^(.+?)\s+([\d.,]+)\s*(?:d|đ|vnd)?$/i);
+        label = String(match?.[1] || '').trim();
+        value = String(match?.[2] || '').trim();
+      }
+      const amount = parseLooseAmount(value);
+      if (label && Number.isFinite(amount) && amount > 0) {
+        result[label] = amount;
+      }
+    });
+  return result;
+}
+
+function feeMapToLines(value) {
+  return mapEntries(value)
+    .map(([label, amount]) => `${label}: ${Number(amount || 0)}`)
+    .join('\n');
+}
+
 function FieldLabel({ children }) {
   return <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">{children}</label>;
 }
@@ -263,9 +305,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [feeForm, setFeeForm] = useState({
     student_code: '',
     class_id: '',
-    subject_fees_text: '{"toan": 300000}',
-    other_fees_text: '{"ban_tru": 200000}',
-    total_amount: '500000',
+    subject_fees_text: '',
+    other_fees_text: '',
+    total_amount: '',
     payment_status: 'unpaid',
     payment_method: '',
     paid_at: '',
@@ -287,6 +329,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     event_date: '',
     image_url: '',
   });
+  const [editingEventId, setEditingEventId] = useState(null);
+  const [eventImageLoading, setEventImageLoading] = useState(false);
+  const eventImageFileRef = useRef(null);
   const [grades, setGrades] = useState([]);
   const [gradeForm, setGradeForm] = useState({
     student_code: '',
@@ -314,6 +359,13 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [eventSearch, setEventSearch] = useState('');
   const [gradeSearch, setGradeSearch] = useState('');
   const [chatSearch, setChatSearch] = useState('');
+  const [apiImportForms, setApiImportForms] = useState({
+    students: { url: '', api_key: '' },
+    timetables: { url: '', api_key: '' },
+    fees: { url: '', api_key: '' },
+    grades: { url: '', api_key: '' },
+  });
+  const [apiImportLoading, setApiImportLoading] = useState('');
 
   // Excel import state (students)
   const [importLoading, setImportLoading] = useState(false);
@@ -942,6 +994,71 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
   }
 
+  async function submitApiImport(moduleName, reloadFn) {
+    const form = apiImportForms[moduleName] || { url: '', api_key: '' };
+    if (!form.url.trim()) {
+      setMessage('Vui lòng nhập URL API nguồn.');
+      return;
+    }
+    setApiImportLoading(moduleName);
+    setMessage('');
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/external-import/${moduleName}`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify(form),
+      });
+      setMessage(`✅ Import qua API thành công ${json.imported || 0} bản ghi.`);
+      await reloadFn();
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setApiImportLoading('');
+    }
+  }
+
+  function renderApiImportPanel(moduleName, title, reloadFn) {
+    const form = apiImportForms[moduleName] || { url: '', api_key: '' };
+    const loading = apiImportLoading === moduleName;
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-sky-300 bg-sky-50 p-4">
+        <p className="mb-2 text-sm font-semibold text-sky-900">{title}</p>
+        <div className="grid gap-2 md:grid-cols-[1fr_260px_auto]">
+          <input
+            className="rounded-lg border border-sky-200 px-3 py-2 text-sm"
+            placeholder="URL API dữ liệu của trường"
+            value={form.url}
+            onChange={(event) =>
+              setApiImportForms((prev) => ({
+                ...prev,
+                [moduleName]: { ...prev[moduleName], url: event.target.value },
+              }))
+            }
+          />
+          <input
+            className="rounded-lg border border-sky-200 px-3 py-2 text-sm"
+            placeholder="API key"
+            value={form.api_key}
+            onChange={(event) =>
+              setApiImportForms((prev) => ({
+                ...prev,
+                [moduleName]: { ...prev[moduleName], api_key: event.target.value },
+              }))
+            }
+          />
+          <button
+            type="button"
+            onClick={() => submitApiImport(moduleName, reloadFn)}
+            disabled={loading}
+            className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+          >
+            {loading ? 'Đang nhập...' : 'Nhập qua API'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   async function createStudent(event) {
     event.preventDefault();
     setMessage('');
@@ -967,12 +1084,14 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         method: 'PUT',
         headers: adminHeaders,
         body: JSON.stringify({
+          student_code: studentForm.student_code,
           full_name: studentForm.full_name,
           class_name: studentForm.class_name,
         }),
       });
       setEditingStudentId(null);
       setStudentForm({ student_code: '', full_name: '', class_name: '' });
+      setMessage('✅ Đã cập nhật học sinh.');
       await loadStudents();
     } catch (error) {
       setMessage(error.message);
@@ -1146,8 +1265,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     event.preventDefault();
     setMessage('');
     try {
-      const subjectFees = JSON.parse(feeForm.subject_fees_text || '{}');
-      const otherFees = JSON.parse(feeForm.other_fees_text || '{}');
+      const subjectFees = parseFeeLines(feeForm.subject_fees_text);
+      const otherFees = parseFeeLines(feeForm.other_fees_text);
+      const computedTotal = [...Object.values(subjectFees), ...Object.values(otherFees)]
+        .reduce((sum, amount) => sum + Number(amount || 0), 0);
       await requestJson(`${ADMIN_WEB_API}/fees`, {
         method: 'POST',
         headers: adminHeaders,
@@ -1156,7 +1277,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           class_id: feeForm.class_id || null,
           subject_fees: subjectFees,
           other_fees: otherFees,
-          total_amount: Number(feeForm.total_amount || 0),
+          total_amount: Number(feeForm.total_amount || computedTotal || 0),
           payment_status: feeForm.payment_status,
           payment_method: feeForm.payment_method || null,
           paid_at: feeForm.paid_at || null,
@@ -1173,8 +1294,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     if (!editingFeeId) return;
     setMessage('');
     try {
-      const subjectFees = JSON.parse(feeForm.subject_fees_text || '{}');
-      const otherFees = JSON.parse(feeForm.other_fees_text || '{}');
+      const subjectFees = parseFeeLines(feeForm.subject_fees_text);
+      const otherFees = parseFeeLines(feeForm.other_fees_text);
+      const computedTotal = [...Object.values(subjectFees), ...Object.values(otherFees)]
+        .reduce((sum, amount) => sum + Number(amount || 0), 0);
       await requestJson(`${ADMIN_WEB_API}/fees/${editingFeeId}`, {
         method: 'PUT',
         headers: adminHeaders,
@@ -1183,7 +1306,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           class_id: feeForm.class_id || null,
           subject_fees: subjectFees,
           other_fees: otherFees,
-          total_amount: Number(feeForm.total_amount || 0),
+          total_amount: Number(feeForm.total_amount || computedTotal || 0),
           payment_status: feeForm.payment_status,
           payment_method: feeForm.payment_method || null,
           paid_at: feeForm.paid_at || null,
@@ -1193,9 +1316,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       setFeeForm({
         student_code: '',
         class_id: '',
-        subject_fees_text: '{"toan": 300000}',
-        other_fees_text: '{"ban_tru": 200000}',
-        total_amount: '500000',
+        subject_fees_text: '',
+        other_fees_text: '',
+        total_amount: '',
         payment_status: 'unpaid',
         payment_method: '',
         paid_at: '',
@@ -1212,8 +1335,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     setFeeForm({
       student_code: item.student_code || '',
       class_id: item.class_id || '',
-      subject_fees_text: JSON.stringify(item.subject_fees || {}, null, 0),
-      other_fees_text: JSON.stringify(item.other_fees || {}, null, 0),
+      subject_fees_text: feeMapToLines(item.subject_fees || {}),
+      other_fees_text: feeMapToLines(item.other_fees || {}),
       total_amount: String(item.total_amount ?? ''),
       payment_status: item.payment_status || 'unpaid',
       payment_method: item.payment_method || '',
@@ -1226,9 +1349,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     setFeeForm({
       student_code: '',
       class_id: '',
-      subject_fees_text: '{"toan": 300000}',
-      other_fees_text: '{"ban_tru": 200000}',
-      total_amount: '500000',
+      subject_fees_text: '',
+      other_fees_text: '',
+      total_amount: '',
       payment_status: 'unpaid',
       payment_method: '',
       paid_at: '',
@@ -1282,16 +1405,73 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     event.preventDefault();
     setMessage('');
     try {
-      await requestJson(`${ADMIN_WEB_API}/events`, {
-        method: 'POST',
+      await requestJson(`${ADMIN_WEB_API}/events${editingEventId ? `/${editingEventId}` : ''}`, {
+        method: editingEventId ? 'PUT' : 'POST',
         headers: adminHeaders,
         body: JSON.stringify(eventForm),
       });
+      setEditingEventId(null);
       setEventForm({ title: '', content: '', event_date: '', image_url: '' });
       await loadEvents();
     } catch (error) {
       setMessage(error.message);
     }
+  }
+
+  function startEditEvent(item) {
+    setEditingEventId(item.id);
+    setEventForm({
+      title: item.title || '',
+      content: item.content || '',
+      event_date: item.event_date ? String(item.event_date).slice(0, 16) : '',
+      image_url: item.image_url || '',
+    });
+  }
+
+  function cancelEditEvent() {
+    setEditingEventId(null);
+    setEventForm({ title: '', content: '', event_date: '', image_url: '' });
+  }
+
+  function handleEventImageFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage('Vui lòng chọn file ảnh.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage('Ảnh tối đa 5MB.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setEventImageLoading(true);
+      setMessage('');
+      try {
+        const json = await requestJson(`${ADMIN_WEB_API}/events/upload-image`, {
+          method: 'POST',
+          headers: adminHeaders,
+          body: JSON.stringify({
+            file_name: file.name,
+            data_url: String(reader.result || ''),
+          }),
+        });
+        const imageUrl = json.url?.startsWith('http')
+          ? json.url
+          : `${API_BASE.replace(/\/api\/v1\/?$/, '')}${json.url}`;
+        setEventForm((prev) => ({ ...prev, image_url: imageUrl }));
+      } catch (error) {
+        setMessage(error.message);
+      } finally {
+        setEventImageLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   }
 
   async function deleteEvent(id) {
@@ -1500,6 +1680,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               ) : null}
             </form>
 
+            {renderApiImportPanel('students', 'Nhập danh sách học sinh qua API', loadStudents)}
+
             {/* ── Excel Import ── */}
             <div className="mb-4 rounded-lg border border-dashed border-blue-300 bg-blue-50 p-4">
               <p className="mb-2 text-sm font-semibold text-blue-800">📥 Import từ Excel</p>
@@ -1645,6 +1827,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         ) : null}
 
         {tab === 'timetable' && (
+          <>
           <div className="mt-4 rounded-lg border border-dashed border-emerald-300 bg-emerald-50 p-4">
             <p className="mb-2 text-sm font-semibold text-emerald-800">📥 Import TKB từ Excel</p>
             <p className="mb-3 text-xs text-emerald-700">
@@ -1693,6 +1876,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               </div>
             )}
           </div>
+          {renderApiImportPanel('timetables', 'Nhập thời khóa biểu qua API', loadTimetables)}
+          </>
         )}
 
         {tab === 'provision' ? (
@@ -2032,8 +2217,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 <FieldLabel>Khoản học phí theo môn</FieldLabel>
                 <textarea
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
-                  placeholder='VD: {"toan":300000,"anh":200000}'
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder={'Toán: 500000\nVăn 300.000'}
                   value={feeForm.subject_fees_text}
                   onChange={(e) =>
                     setFeeForm((prev) => ({ ...prev, subject_fees_text: e.target.value }))
@@ -2044,8 +2229,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 <FieldLabel>Khoản thu khác</FieldLabel>
                 <textarea
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
-                  placeholder='VD: {"ban_tru":200000}'
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder={'Bán trú: 500000\nHoạt động ngoại khóa 150.000'}
                   value={feeForm.other_fees_text}
                   onChange={(e) =>
                     setFeeForm((prev) => ({ ...prev, other_fees_text: e.target.value }))
@@ -2191,6 +2376,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               ))}
             </div>
             {filteredFees.length === 0 ? <EmptyState message="Chưa có khoản phí phù hợp với bộ lọc." /> : null}
+
+            {renderApiImportPanel('fees', 'Nhập học phí và khoản thu qua API', loadFees)}
 
             {/* ── Excel Import fees ── */}
             <div className="mt-4 rounded-lg border border-dashed border-orange-300 bg-orange-50 p-4">
@@ -2366,12 +2553,39 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   onChange={(e) => setEventForm((prev) => ({ ...prev, event_date: e.target.value }))}
                 />
               </div>
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="URL ảnh sự kiện (tùy chọn)"
-                value={eventForm.image_url}
-                onChange={(e) => setEventForm((prev) => ({ ...prev, image_url: e.target.value }))}
-              />
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <input
+                  ref={eventImageFileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleEventImageFile}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => eventImageFileRef.current?.click()}
+                    disabled={eventImageLoading}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                  >
+                    {eventImageLoading ? 'Đang tải ảnh...' : 'Chọn ảnh từ máy'}
+                  </button>
+                  {eventForm.image_url ? (
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-600">
+                      {eventForm.image_url}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500">Ảnh minh họa là tùy chọn.</span>
+                  )}
+                </div>
+                {eventForm.image_url ? (
+                  <img
+                    src={eventForm.image_url}
+                    alt=""
+                    className="mt-3 h-36 w-full rounded-lg object-cover"
+                  />
+                ) : null}
+              </div>
               <textarea
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Nội dung sự kiện hoặc hoạt động"
@@ -2379,9 +2593,20 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 value={eventForm.content}
                 onChange={(e) => setEventForm((prev) => ({ ...prev, content: e.target.value }))}
               />
-              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
-                Đăng sự kiện
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+                  {editingEventId ? 'Cập nhật sự kiện' : 'Đăng sự kiện'}
+                </button>
+                {editingEventId ? (
+                  <button
+                    type="button"
+                    onClick={cancelEditEvent}
+                    className="rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    Hủy sửa
+                  </button>
+                ) : null}
+              </div>
             </form>
             <ModuleSearch
               value={eventSearch}
@@ -2408,12 +2633,22 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                           {item.event_date ? new Date(item.event_date).toLocaleString('vi-VN') : 'Chưa đặt ngày diễn ra'}
                         </div>
                       </div>
-                      <button
-                        onClick={() => deleteEvent(item.id)}
-                        className="rounded bg-rose-100 px-2 py-1 text-rose-700"
-                      >
-                        Xóa
-                      </button>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditEvent(item)}
+                          className="rounded bg-amber-100 px-2 py-1 text-amber-700"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteEvent(item.id)}
+                          className="rounded bg-rose-100 px-2 py-1 text-rose-700"
+                        >
+                          Xóa
+                        </button>
+                      </div>
                     </div>
                     <p className="mt-2 line-clamp-3 text-slate-600">{item.content}</p>
                   </div>
@@ -2492,6 +2727,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               ))}
             </div>
             {filteredGrades.length === 0 ? <EmptyState message="Chưa có bảng điểm phù hợp với bộ lọc." /> : null}
+
+            {renderApiImportPanel('grades', 'Nhập bảng điểm qua API', loadGrades)}
 
             {/* ── Excel Import grades ── */}
             <div className="mt-4 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 p-4">

@@ -6,6 +6,9 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
+const fs = require('fs/promises');
+const path = require('path');
 const { getSupabase } = require('../config/supabase');
 const { sendPushNotification } = require('../config/firebaseAdmin');
 const { mobileAuth } = require('../middleware/mobileAuth');
@@ -27,6 +30,62 @@ const { buildStudentBulkPayload, buildStudentPayload } = require('../services/ad
 const { buildTimetablePayload } = require('../services/adminWebTimetables');
 
 const router = express.Router();
+
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'school-events');
+
+function buildEventPayload({ body, schoolId, userId }) {
+  const title = String(body?.title || '').trim();
+  const content = String(body?.content || '').trim();
+  const imageUrl = String(body?.image_url || '').trim();
+  const eventDate = String(body?.event_date || '').trim();
+
+  if (!title || !content) {
+    throw new Error('Tiêu đề và nội dung sự kiện không được để trống');
+  }
+
+  return {
+    school_id: schoolId,
+    title,
+    content,
+    image_url: imageUrl || null,
+    event_date: eventDate || null,
+    created_by: userId || null,
+  };
+}
+
+function normalizeExternalRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
+async function fetchExternalRows({ url, apiKey }) {
+  const endpoint = String(url || '').trim();
+  if (!/^https?:\/\//i.test(endpoint)) {
+    throw new Error('URL API phải bắt đầu bằng http:// hoặc https://');
+  }
+
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const key = String(apiKey || '').trim();
+  if (key) {
+    headers.Authorization = `Bearer ${key}`;
+    headers['x-api-key'] = key;
+  }
+
+  const response = await fetch(endpoint, { headers });
+  const json = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(json?.error || json?.message || `API ngoài trả về HTTP ${response.status}`);
+  }
+  const rows = normalizeExternalRows(json);
+  if (rows.length === 0) {
+    throw new Error('API ngoài không trả về danh sách dữ liệu hợp lệ');
+  }
+  return rows;
+}
 
 function requireAdminWebRole(req, res, next) {
   const role = String(req.user?.role || '').toLowerCase();
@@ -298,7 +357,12 @@ router.post('/students', async (req, res) => {
 // PUT /admin-web/students/:id
 router.put('/students/:id', async (req, res) => {
   const supabase = getSupabase();
-  const { full_name, class_name } = req.body;
+  const full_name = String(req.body.full_name || '').trim();
+  const class_name = String(req.body.class_name || '').trim();
+
+  if (!full_name || !class_name) {
+    return res.status(400).json({ ok: false, error: 'Tên học sinh và lớp là bắt buộc' });
+  }
 
   const { data, error } = await supabase
     .from('students')
@@ -306,10 +370,13 @@ router.put('/students/:id', async (req, res) => {
     .eq('id', req.params.id)
     .eq('school_id', req.schoolId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     return res.status(500).json({ ok: false, error: error.message });
+  }
+  if (!data) {
+    return res.status(404).json({ ok: false, error: 'Không tìm thấy học sinh trong trường hiện tại' });
   }
   return res.json({ ok: true, data });
 });
@@ -615,25 +682,20 @@ router.post('/announcements', async (req, res) => {
 // POST /admin-web/events
 router.post('/events', async (req, res) => {
   const supabase = getSupabase();
-  const title = String(req.body?.title || '').trim();
-  const content = String(req.body?.content || '').trim();
-  const imageUrl = String(req.body?.image_url || '').trim();
-  const eventDate = String(req.body?.event_date || '').trim();
-
-  if (!title || !content) {
-    return res.status(400).json({ ok: false, error: 'Tiêu đề và nội dung sự kiện không được để trống' });
+  let payload;
+  try {
+    payload = buildEventPayload({
+      body: req.body,
+      schoolId: req.schoolId,
+      userId: req.user?.id,
+    });
+  } catch (eventError) {
+    return res.status(400).json({ ok: false, error: eventError.message });
   }
 
   const { data, error } = await supabase
     .from('school_events')
-    .insert({
-      school_id: req.schoolId,
-      title,
-      content,
-      image_url: imageUrl || null,
-      event_date: eventDate || null,
-      created_by: req.user?.id || null,
-    })
+    .insert(payload)
     .select()
     .single();
 
@@ -641,6 +703,65 @@ router.post('/events', async (req, res) => {
     return res.status(500).json({ ok: false, error: error.message });
   }
   return res.status(201).json({ ok: true, data });
+});
+
+// PUT /admin-web/events/:id
+router.put('/events/:id', async (req, res) => {
+  const supabase = getSupabase();
+  let payload;
+  try {
+    payload = buildEventPayload({
+      body: req.body,
+      schoolId: req.schoolId,
+      userId: req.user?.id,
+    });
+  } catch (eventError) {
+    return res.status(400).json({ ok: false, error: eventError.message });
+  }
+
+  const { data, error } = await supabase
+    .from('school_events')
+    .update({
+      title: payload.title,
+      content: payload.content,
+      image_url: payload.image_url,
+      event_date: payload.event_date,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', req.params.id)
+    .eq('school_id', req.schoolId)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+  return res.json({ ok: true, data });
+});
+
+// POST /admin-web/events/upload-image
+router.post('/events/upload-image', async (req, res) => {
+  const dataUrl = String(req.body?.data_url || '');
+  const originalName = String(req.body?.file_name || 'event-image').replace(/[^\w.-]/g, '_');
+  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) {
+    return res.status(400).json({ ok: false, error: 'Ảnh không hợp lệ. Chỉ hỗ trợ PNG, JPG hoặc WEBP.' });
+  }
+
+  const extension = match[1].includes('png') ? 'png' : match[1].includes('webp') ? 'webp' : 'jpg';
+  const buffer = Buffer.from(match[2], 'base64');
+  if (buffer.length > 5 * 1024 * 1024) {
+    return res.status(400).json({ ok: false, error: 'Ảnh tối đa 5MB.' });
+  }
+
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  const fileName = `${req.schoolId}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}-${originalName}.${extension}`;
+  const filePath = path.join(UPLOAD_DIR, fileName);
+  await fs.writeFile(filePath, buffer);
+  return res.status(201).json({
+    ok: true,
+    url: `/uploads/school-events/${fileName}`,
+  });
 });
 
 // POST /admin-web/chat/messages
@@ -1012,6 +1133,100 @@ router.post('/grades/bulk', async (req, res) => {
   const { data, error } = await supabase.from('grades').insert(toInsert).select('id');
   if (error) return res.status(500).json({ ok: false, error: error.message });
   return res.status(201).json({ ok: true, inserted: data.length });
+});
+
+// POST /admin-web/external-import/:module
+router.post('/external-import/:module', async (req, res) => {
+  const supabase = getSupabase();
+  const moduleName = String(req.params.module || '').trim();
+  let rows;
+
+  try {
+    rows = await fetchExternalRows({
+      url: req.body?.url,
+      apiKey: req.body?.api_key,
+    });
+  } catch (externalError) {
+    return res.status(400).json({ ok: false, error: externalError.message });
+  }
+
+  try {
+    if (moduleName === 'students') {
+      const payload = buildStudentBulkPayload({ rows, schoolId: req.schoolId });
+      if (payload.sanitised.length === 0) {
+        return res.status(400).json({ ok: false, error: 'API không có dòng học sinh hợp lệ', invalid: payload.invalid });
+      }
+      const { data, error } = await supabase
+        .from('students')
+        .upsert(payload.sanitised, { onConflict: 'student_code', ignoreDuplicates: false })
+        .select('id');
+      if (error) return res.status(500).json({ ok: false, error: error.message });
+      return res.json({ ok: true, imported: data.length, invalid: payload.invalid });
+    }
+
+    if (moduleName === 'timetables') {
+      const sanitised = rows.map((row) => buildTimetablePayload({ row, schoolId: req.schoolId }));
+      const { data, error } = await supabase.from('timetables').insert(sanitised).select('id');
+      if (error) return res.status(500).json({ ok: false, error: error.message });
+      return res.json({ ok: true, imported: data.length });
+    }
+
+    if (moduleName === 'fees') {
+      const cache = {};
+      const toInsert = [];
+      for (const row of rows) {
+        const code = String(row.student_code || row['mã học sinh'] || row.ma_hoc_sinh || '').trim();
+        if (!code) continue;
+        if (cache[code] === undefined) {
+          const { data: student } = await supabase
+            .from('students')
+            .select('id')
+            .eq('student_code', code)
+            .eq('school_id', req.schoolId)
+            .maybeSingle();
+          cache[code] = student?.id || null;
+        }
+        if (!cache[code]) {
+          return res.status(404).json({ ok: false, error: `student_code ${code} was not found in school ${req.schoolId}` });
+        }
+        toInsert.push(buildFeeNoticePayload({ row: { ...row, student_code: code }, schoolId: req.schoolId, studentId: cache[code] }));
+      }
+      if (toInsert.length === 0) return res.status(400).json({ ok: false, error: 'API không có khoản phí hợp lệ' });
+      const { data, error } = await supabase.from('fee_notices').insert(toInsert).select('id');
+      if (error) return res.status(500).json({ ok: false, error: error.message });
+      return res.json({ ok: true, imported: data.length });
+    }
+
+    if (moduleName === 'grades') {
+      const cache = {};
+      const toInsert = [];
+      for (const row of rows) {
+        const code = String(row.student_code || row['mã học sinh'] || row.ma_hoc_sinh || '').trim();
+        if (!code || !String(row.subject_name || row['môn học'] || row.mon_hoc || '').trim()) continue;
+        if (cache[code] === undefined) {
+          const { data: student } = await supabase
+            .from('students')
+            .select('id')
+            .eq('student_code', code)
+            .eq('school_id', req.schoolId)
+            .maybeSingle();
+          cache[code] = student?.id || null;
+        }
+        if (!cache[code]) {
+          return res.status(404).json({ ok: false, error: `student_code ${code} was not found in school ${req.schoolId}` });
+        }
+        toInsert.push(buildGradePayload({ row: { ...row, student_code: code }, schoolId: req.schoolId, studentId: cache[code] }));
+      }
+      if (toInsert.length === 0) return res.status(400).json({ ok: false, error: 'API không có bảng điểm hợp lệ' });
+      const { data, error } = await supabase.from('grades').insert(toInsert).select('id');
+      if (error) return res.status(500).json({ ok: false, error: error.message });
+      return res.json({ ok: true, imported: data.length });
+    }
+
+    return res.status(400).json({ ok: false, error: 'Module import API không hợp lệ' });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message });
+  }
 });
 
 // POST /admin-web/mock-scan

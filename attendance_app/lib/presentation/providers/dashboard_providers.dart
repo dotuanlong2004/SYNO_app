@@ -24,6 +24,7 @@ import '../../domain/auth/token_pair.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/event_comment.dart';
 import '../../domain/entities/fee_notice.dart';
 import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/school_event_item.dart';
@@ -322,6 +323,12 @@ final eventsProvider = FutureProvider<List<SchoolEventItem>>((ref) async {
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);
   return dataSource.fetchEvents();
 });
+
+final eventCommentsProvider =
+    FutureProvider.family<List<EventComment>, int>((ref, eventId) async {
+      final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+      return dataSource.fetchEventComments(eventId);
+    });
 
 final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);

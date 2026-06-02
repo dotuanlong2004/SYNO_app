@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/event_comment.dart';
 import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/school_event_item.dart';
 
@@ -124,6 +125,66 @@ class ParentFeaturesRemoteDataSource {
       throw Exception(serverMsg ?? 'Không thể tải sự kiện (${e.type.name})');
     } catch (e) {
       throw Exception('Lỗi khi tải sự kiện: $e');
+    }
+  }
+
+  Future<List<EventComment>> fetchEventComments(int eventId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/events/$eventId/comments',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final rows = response.data?['data'];
+      if (rows is! List) return const <EventComment>[];
+      return rows.whereType<Map<String, dynamic>>().map((json) {
+        return EventComment(
+          id: _parseInt(json['id']),
+          eventId: _parseInt(json['event_id']),
+          parentId: '${json['parent_id'] ?? ''}',
+          commentText: '${json['comment_text'] ?? ''}',
+          createdAt: json['created_at'] == null
+              ? null
+              : DateTime.tryParse('${json['created_at']}'),
+        );
+      }).toList();
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(serverMsg ?? 'Không thể tải bình luận (${e.type.name})');
+    } catch (e) {
+      throw Exception('Lỗi khi tải bình luận: $e');
+    }
+  }
+
+  Future<EventComment> sendEventComment(int eventId, String commentText) async {
+    final text = commentText.trim();
+    if (text.isEmpty) {
+      throw Exception('Nội dung bình luận không được để trống');
+    }
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/events/$eventId/comments',
+        data: {'comment_text': text},
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final row = response.data?['data'];
+      if (row is! Map<String, dynamic>) {
+        throw Exception('Phản hồi gửi bình luận không hợp lệ');
+      }
+      return EventComment(
+        id: _parseInt(row['id']),
+        eventId: _parseInt(row['event_id']),
+        parentId: '${row['parent_id'] ?? ''}',
+        commentText: '${row['comment_text'] ?? ''}',
+        createdAt: row['created_at'] == null
+            ? null
+            : DateTime.tryParse('${row['created_at']}'),
+      );
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(serverMsg ?? 'Không thể gửi bình luận (${e.type.name})');
+    } catch (e) {
+      throw Exception('Lỗi khi gửi bình luận: $e');
     }
   }
 

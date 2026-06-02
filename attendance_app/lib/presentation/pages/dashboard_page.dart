@@ -1908,63 +1908,221 @@ class _EventsTab extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.68,
-        minChildSize: 0.35,
-        maxChildSize: 0.92,
-        builder: (_, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (_) => _EventDetailSheet(item: item),
+    );
+  }
+}
+
+class _EventDetailSheet extends ConsumerStatefulWidget {
+  const _EventDetailSheet({required this.item});
+
+  final SchoolEventItem item;
+
+  @override
+  ConsumerState<_EventDetailSheet> createState() => _EventDetailSheetState();
+}
+
+class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
+  final _commentController = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(parentFeaturesDataSourceProvider)
+          .sendEventComment(widget.item.id, text);
+      _commentController.clear();
+      ref.invalidate(eventCommentsProvider(widget.item.id));
+      await ref.read(eventCommentsProvider(widget.item.id).future);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể gửi bình luận')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final date = item.eventDate ?? item.publishedAt;
+    final commentsAsync = ref.watch(eventCommentsProvider(item.id));
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.78,
+      minChildSize: 0.42,
+      maxChildSize: 0.94,
+      builder: (_, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 16),
-            if (item.imageUrl.isNotEmpty)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.network(item.imageUrl, fit: BoxFit.cover),
-                ),
-              ),
-            const SizedBox(height: 16),
-            const Text(
-              'Sự kiện trường',
-              style: TextStyle(
-                color: AppTheme.primaryColor,
-                fontWeight: FontWeight.w700,
+          ),
+          const SizedBox(height: 16),
+          if (item.imageUrl.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(item.imageUrl, fit: BoxFit.cover),
               ),
             ),
+          const SizedBox(height: 16),
+          const Text(
+            'Sự kiện trường',
+            style: TextStyle(
+              color: AppTheme.primaryColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.title,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+          ),
+          if (date != null) ...[
             const SizedBox(height: 8),
             Text(
-              item.title,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-            ),
-            if ((item.eventDate ?? item.publishedAt) != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                DateFormat(
-                  'dd/MM/yyyy HH:mm',
-                ).format((item.eventDate ?? item.publishedAt)!),
-                style: TextStyle(color: Colors.grey[500], fontSize: 12),
-              ),
-            ],
-            const Divider(height: 24),
-            Text(
-              item.content,
-              style: const TextStyle(fontSize: 15, height: 1.6),
+              DateFormat('dd/MM/yyyy HH:mm').format(date),
+              style: TextStyle(color: Colors.grey[500], fontSize: 12),
             ),
           ],
-        ),
+          const Divider(height: 24),
+          Text(
+            item.content,
+            style: const TextStyle(fontSize: 15, height: 1.6),
+          ),
+          const Divider(height: 28),
+          const Text(
+            'Bình luận',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          commentsAsync.when(
+            data: (comments) {
+              if (comments.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Chưa có bình luận',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                );
+              }
+              return Column(
+                children: comments.map((comment) {
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          comment.commentText,
+                          style: const TextStyle(fontSize: 14, height: 1.45),
+                        ),
+                        if (comment.createdAt != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            DateFormat(
+                              'dd/MM/yyyy HH:mm',
+                            ).format(comment.createdAt!),
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+            error: (_, stackTrace) => const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('Không thể tải bình luận'),
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  minLines: 1,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _sendComment(),
+                  decoration: InputDecoration(
+                    hintText: 'Viết bình luận...',
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton.filled(
+                onPressed: _sending ? null : _sendComment,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                icon: _sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, color: Colors.white),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

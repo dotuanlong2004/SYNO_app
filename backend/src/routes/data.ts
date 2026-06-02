@@ -233,6 +233,67 @@ router.get('/events', mobileAuth, async (req, res) => {
   }
 });
 
+router.get('/events/:eventId/comments', mobileAuth, async (req, res) => {
+  const schoolId = String(req.user?.school_id ?? '1');
+  const eventId = Number(req.params.eventId);
+  if (!Number.isFinite(eventId)) {
+    return res.status(400).json({ ok: false, error: 'eventId is invalid' });
+  }
+  try {
+    const { data, error } = await getSupabase()
+      .from('school_event_comments')
+      .select('id, event_id, parent_id, comment_text, created_at')
+      .eq('school_id', schoolId)
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return res.status(200).json({ ok: true, count: data.length, data });
+  } catch (error) {
+    console.error('Failed to fetch event comments', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
+router.post('/events/:eventId/comments', mobileAuth, async (req, res) => {
+  const schoolId = String(req.user?.school_id ?? '1');
+  const eventId = Number(req.params.eventId);
+  const commentText = String(req.body?.comment_text || '').trim();
+  if (!Number.isFinite(eventId) || !commentText) {
+    return res.status(400).json({ ok: false, error: 'eventId and comment_text are required' });
+  }
+
+  try {
+    const supabase = getSupabase();
+    const { data: eventRow, error: eventError } = await supabase
+      .from('school_events')
+      .select('id')
+      .eq('id', eventId)
+      .eq('school_id', schoolId)
+      .maybeSingle();
+    if (eventError) throw eventError;
+    if (!eventRow) {
+      return res.status(404).json({ ok: false, error: 'Event not found' });
+    }
+
+    const { data, error } = await supabase
+      .from('school_event_comments')
+      .insert({
+        event_id: eventId,
+        school_id: schoolId,
+        parent_id: req.user.id,
+        comment_text: commentText,
+      })
+      .select('id, event_id, parent_id, comment_text, created_at')
+      .single();
+    if (error) throw error;
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    console.error('Failed to create event comment', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
 router.get('/grades', mobileAuth, async (req, res) => {
   const schoolId = String(req.user?.school_id ?? '1');
   const userRole = String(req.user?.role ?? '').toLowerCase();
