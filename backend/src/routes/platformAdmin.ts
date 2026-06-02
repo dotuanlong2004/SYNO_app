@@ -71,6 +71,33 @@ async function assertSchoolExists(supabase, schoolId) {
   return { ok: true };
 }
 
+async function listAuthUserSummaries(supabase) {
+  const summaries = new Map();
+  let page = 1;
+  const perPage = 1000;
+
+  while (page < 20) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      console.warn('[platform-admin] list auth users failed:', error.message);
+      return summaries;
+    }
+
+    const users = data?.users || [];
+    users.forEach((user) => {
+      summaries.set(user.id, {
+        email: user.email || '',
+        created_at: user.created_at || null,
+      });
+    });
+
+    if (users.length < perPage) break;
+    page += 1;
+  }
+
+  return summaries;
+}
+
 router.get('/schools', async (req, res) => {
   const { data, error } = await getSupabase()
     .from('schools')
@@ -151,14 +178,21 @@ router.put('/schools/:id', async (req, res) => {
 });
 
 router.get('/admin-users', async (req, res) => {
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+  const { data, error } = await supabase
     .from('user_profiles')
-    .select('id, full_name, role, school_id, is_active, updated_at')
+    .select('id, full_name, role, school_id, is_active, created_at, updated_at')
     .in('role', ['teacher', 'admin', 'super_admin'])
     .order('updated_at', { ascending: false });
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
-  return res.json({ ok: true, data: data || [] });
+  const authUsers = await listAuthUserSummaries(supabase);
+  const rows = (data || []).map((item) => ({
+    ...item,
+    email: authUsers.get(item.id)?.email || '',
+    created_at: item.created_at || authUsers.get(item.id)?.created_at || null,
+  }));
+  return res.json({ ok: true, data: rows });
 });
 
 router.post('/admin-users', async (req, res) => {
@@ -185,7 +219,7 @@ router.post('/admin-users', async (req, res) => {
       ...payload.profile,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' })
-    .select('id, full_name, role, school_id, is_active, updated_at')
+    .select('id, full_name, role, school_id, is_active, created_at, updated_at')
     .single();
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
@@ -197,7 +231,7 @@ router.post('/admin-users', async (req, res) => {
     schoolId: data.school_id,
     details: { role: data.role, full_name: data.full_name },
   });
-  return res.status(201).json({ ok: true, data });
+  return res.status(201).json({ ok: true, data: { ...data, email: authUser.user.email || accountInput.email } });
 });
 
 router.put('/admin-users/:id', async (req, res) => {
@@ -230,7 +264,7 @@ router.put('/admin-users/:id', async (req, res) => {
     .from('user_profiles')
     .update(payload)
     .eq('id', userId)
-    .select('id, full_name, role, school_id, is_active, updated_at')
+    .select('id, full_name, role, school_id, is_active, created_at, updated_at')
     .single();
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
@@ -260,7 +294,7 @@ router.patch('/admin-users/:id/status', async (req, res) => {
     .from('user_profiles')
     .update({ is_active: statusInput.is_active, updated_at: new Date().toISOString() })
     .eq('id', userId)
-    .select('id, full_name, role, school_id, is_active, updated_at')
+    .select('id, full_name, role, school_id, is_active, created_at, updated_at')
     .single();
 
   if (error) return res.status(500).json({ ok: false, error: error.message });

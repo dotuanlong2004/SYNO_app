@@ -1,7 +1,20 @@
 export function roleLabel(role: string | null | undefined): string {
   switch (String(role || '').toLowerCase()) {
     case 'super_admin':
-      return 'Quản trị viên';
+      return 'Quản trị hệ thống';
+    case 'admin':
+      return 'Tài khoản nhà trường';
+    case 'teacher':
+      return 'Tài khoản nhà trường';
+    default:
+      return 'Nhân sự';
+  }
+}
+
+export function roleDetailLabel(role: string | null | undefined): string {
+  switch (String(role || '').toLowerCase()) {
+    case 'super_admin':
+      return 'SYNO Super Admin';
     case 'admin':
       return 'Admin trường';
     case 'teacher':
