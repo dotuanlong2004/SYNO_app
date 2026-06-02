@@ -51,10 +51,13 @@ URL:
 http://localhost:5173
 ```
 
-Tài khoản admin đang dùng trong UI hiện tại:
+Tài khoản admin trường đang dùng:
 
 ```text
-Admin School 2
+Email: admin@school.edu
+Mật khẩu: admin123
+Tên hiển thị đúng: Admin School
+Trường: Huu Nghi School (school_id=1)
 ```
 
 ## 3. Super Admin Web

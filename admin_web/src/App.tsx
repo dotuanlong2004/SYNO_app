@@ -3058,6 +3058,32 @@ function App() {
     setAuthUser(null);
   }
 
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+
+    async function syncCurrentUser() {
+      try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        const json = await response.json().catch(() => null);
+        if (cancelled || !response.ok || !json?.ok || !json.user) return;
+        const role = String(json.user.role || '').toLowerCase();
+        if (role !== 'admin' && role !== 'teacher') return;
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(json.user));
+        setAuthUser(json.user);
+      } catch {
+        // Keep the saved session; authenticated API calls still handle expiry.
+      }
+    }
+
+    syncCurrentUser();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
+
   if (!authToken || !authUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }

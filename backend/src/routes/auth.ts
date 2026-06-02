@@ -186,6 +186,36 @@ router.post('/register-parent', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 });
+
+router.get('/me', async (req, res) => {
+  const authHeader = String(req.headers.authorization || '');
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    return res.status(401).json({ ok: false, error: 'Missing bearer token' });
+  }
+
+  try {
+    const { data, error } = await getSupabase().auth.getUser(token);
+    if (error || !data?.user) {
+      return res.status(401).json({ ok: false, error: error?.message || 'Invalid token' });
+    }
+
+    const { data: profile } = await getSupabase()
+      .from('user_profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    return res.status(200).json({
+      ok: true,
+      user: formatUserResponse(data.user, profile),
+    });
+  } catch (error) {
+    console.error('Get current user failed', error);
+    return res.status(401).json({ ok: false, error: 'Invalid token' });
+  }
+});
+
 router.post('/refresh', async (req, res) => {
   const refreshToken = String(req.body?.refresh_token ?? '').trim();
   if (!refreshToken) {
