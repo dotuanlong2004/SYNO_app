@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/fee_notice.dart';
+import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/school_event_item.dart';
 import '../../domain/entities/timetable_entry.dart';
 import '../providers/dashboard_providers.dart';
@@ -2427,6 +2428,77 @@ class _GradesTab extends ConsumerWidget {
     return const Color(0xFFDC2626);
   }
 
+  double? _termAverage(List<GradeRecord> grades, String semester) {
+    final rows = grades.where((grade) => grade.semester == semester).toList();
+    if (rows.isEmpty) return null;
+    return rows.fold<double>(0, (sum, grade) => sum + grade.subjectAverage) /
+        rows.length;
+  }
+
+  double _termTotal(List<GradeRecord> grades, String semester) {
+    return grades
+        .where((grade) => grade.semester == semester)
+        .fold<double>(0, (sum, grade) => sum + grade.subjectAverage);
+  }
+
+  Widget _summaryCard({
+    required String title,
+    required double? average,
+    required double total,
+    required IconData icon,
+  }) {
+    final color = _scoreColor(average ?? 0);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withAlpha(18),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  average == null
+                      ? 'Chưa có dữ liệu'
+                      : 'Tổng: ${total.toStringAsFixed(1)} | TB: ${average.toStringAsFixed(1)}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final gradesAsync = ref.watch(gradesProvider);
@@ -2438,12 +2510,14 @@ class _GradesTab extends ConsumerWidget {
             message: 'Chưa có bảng điểm',
           );
         }
-        // Tính GPA
-        final scoredGrades = grades.toList();
-        final gpa = scoredGrades.isEmpty
-            ? null
-            : scoredGrades.fold<double>(0, (sum, g) => sum + g.finalScore) /
-                  scoredGrades.length;
+        final semester1Average = _termAverage(grades, '1');
+        final semester2Average = _termAverage(grades, '2');
+        final semester1Total = _termTotal(grades, '1');
+        final semester2Total = _termTotal(grades, '2');
+        final yearlyAverage = semester1Average != null && semester2Average != null
+            ? (semester1Average + semester2Average * 2) / 3
+            : semester1Average ?? semester2Average;
+        final yearlyTotal = semester1Total + semester2Total;
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -2453,53 +2527,27 @@ class _GradesTab extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
-              // GPA card
-              if (gpa != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _scoreColor(gpa),
-                        _scoreColor(gpa).withAlpha(180),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.emoji_events_rounded,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Điểm trung bình cuối kỳ',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                          Text(
-                            gpa.toStringAsFixed(1),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 32,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              _summaryCard(
+                title: 'Tổng điểm học kỳ 1',
+                average: semester1Average,
+                total: semester1Total,
+                icon: Icons.looks_one_rounded,
+              ),
+              const SizedBox(height: 10),
+              _summaryCard(
+                title: 'Tổng điểm học kỳ 2',
+                average: semester2Average,
+                total: semester2Total,
+                icon: Icons.looks_two_rounded,
+              ),
+              const SizedBox(height: 10),
+              _summaryCard(
+                title: 'Tổng điểm cả năm',
+                average: yearlyAverage,
+                total: yearlyTotal,
+                icon: Icons.emoji_events_rounded,
+              ),
+              const SizedBox(height: 16),
               // Header bảng
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -2520,6 +2568,14 @@ class _GradesTab extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 46,
+                      child: Text(
+                        'HK',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                     ),
                     SizedBox(
@@ -2568,6 +2624,17 @@ class _GradesTab extends ConsumerWidget {
                           style: const TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 46,
+                        child: Text(
+                          g.semester.isEmpty ? '-' : g.semester,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),

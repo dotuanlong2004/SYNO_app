@@ -232,6 +232,7 @@ class ParentFeaturesRemoteDataSource {
           subjectName: '${json['subject_name'] ?? ''}',
           midtermScore: parseNum(json['midterm_score']),
           finalScore: parseNum(json['final_score']),
+          semester: '${json['semester'] ?? ''}',
         );
       }).toList();
     } on DioException catch (e) {
