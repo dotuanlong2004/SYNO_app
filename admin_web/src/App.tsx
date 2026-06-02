@@ -291,6 +291,12 @@ function defaultTimeForPeriod(period) {
   return defaults[slot] || ['07:30', '08:15'];
 }
 
+function openInputPicker(event) {
+  try {
+    event.currentTarget.showPicker?.();
+  } catch {}
+}
+
 function FieldLabel({ children }) {
   return <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">{children}</label>;
 }
@@ -699,6 +705,15 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     return Array.from(values).filter(Boolean).sort();
   }, [students, timetables, fees]);
 
+  const studentCodeOptions = useMemo(() => {
+    const values = new Set([
+      ...students.map((student) => student.student_code),
+      ...grades.map((item) => item.student_code),
+      ...fees.map((item) => item.student_code),
+    ]);
+    return Array.from(values).filter(Boolean).sort();
+  }, [students, grades, fees]);
+
   const timetableClassOptions = useMemo(() => {
     const values = new Set([
       ...timetables.map((item) => item.class_id),
@@ -725,9 +740,12 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   }, [activeClassTimetables]);
 
   const subjectOptions = useMemo(() => {
-    const values = new Set(timetables.map((item) => item.subject_name));
+    const values = new Set([
+      ...timetables.map((item) => item.subject_name),
+      ...grades.map((item) => item.subject_name),
+    ]);
     return Array.from(values).filter(Boolean).sort();
-  }, [timetables]);
+  }, [timetables, grades]);
 
   const filteredAnnouncements = useMemo(() => {
     return announcements.filter((item) =>
@@ -1381,6 +1399,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   async function createFee(event) {
     event.preventDefault();
     setMessage('');
+    if (!feeForm.student_code.trim()) {
+      setMessage('Vui lòng chọn hoặc nhập mã học sinh trước khi tạo học phí.');
+      return;
+    }
     try {
       const subjectFees = parseFeeLines(feeForm.subject_fees_text);
       const otherFees = parseFeeLines(feeForm.other_fees_text);
@@ -1410,6 +1432,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     event.preventDefault();
     if (!editingFeeId) return;
     setMessage('');
+    if (!feeForm.student_code.trim()) {
+      setMessage('Vui lòng chọn hoặc nhập mã học sinh trước khi cập nhật học phí.');
+      return;
+    }
     try {
       const subjectFees = parseFeeLines(feeForm.subject_fees_text);
       const otherFees = parseFeeLines(feeForm.other_fees_text);
@@ -1447,6 +1473,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   }
 
   function startEditFee(item) {
+    setMessage('');
     setSelectedFee(item);
     setEditingFeeId(item.id);
     setFeeForm({
@@ -1607,6 +1634,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   async function createGrade(event) {
     event.preventDefault();
     setMessage('');
+    if (!gradeForm.student_code.trim() || !gradeForm.subject_name.trim()) {
+      setMessage('Vui lòng chọn mã học sinh và môn học trước khi thêm điểm.');
+      return;
+    }
     try {
       await requestJson(`${ADMIN_WEB_API}/grades`, {
         method: 'POST',
@@ -1736,11 +1767,14 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         ) : null}
 
         <datalist id="student-code-options">
-          {students.map((student) => (
-            <option key={student.id} value={student.student_code}>
-              {student.full_name} - {student.class_name}
-            </option>
-          ))}
+          {studentCodeOptions.map((studentCode) => {
+            const student = students.find((item) => item.student_code === studentCode);
+            return (
+              <option key={studentCode} value={studentCode}>
+                {student ? `${student.full_name} - ${student.class_name}` : studentCode}
+              </option>
+            );
+          })}
         </datalist>
         <datalist id="class-options">
           {classOptions.map((className) => (
@@ -2351,6 +2385,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   placeholder="VD: HS0085"
                   list="student-code-options"
                   value={feeForm.student_code}
+                  onFocus={openInputPicker}
+                  onClick={openInputPicker}
                   onChange={(e) =>
                     setFeeForm((prev) => ({ ...prev, student_code: e.target.value }))
                   }
@@ -2508,6 +2544,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     </div>
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           startEditFee(f);
@@ -2517,6 +2554,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                         Sửa
                       </button>
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           deleteFee(f.id);
@@ -2832,7 +2870,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Mã học sinh"
+                list="student-code-options"
                 value={gradeForm.student_code}
+                onFocus={openInputPicker}
+                onClick={openInputPicker}
                 onChange={(e) =>
                   setGradeForm((prev) => ({ ...prev, student_code: e.target.value }))
                 }
@@ -2840,7 +2881,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Môn học"
+                list="subject-options"
                 value={gradeForm.subject_name}
+                onFocus={openInputPicker}
+                onClick={openInputPicker}
                 onChange={(e) =>
                   setGradeForm((prev) => ({ ...prev, subject_name: e.target.value }))
                 }
