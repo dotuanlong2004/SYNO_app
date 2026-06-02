@@ -291,6 +291,22 @@ function defaultTimeForPeriod(period) {
   return defaults[slot] || ['07:30', '08:15'];
 }
 
+function normalizeSubjectName(subjectName) {
+  const raw = String(subjectName || '').trim();
+  const key = raw.toLowerCase();
+  const aliases = {
+    hoa: 'Hóa học',
+    'hóa': 'Hóa học',
+    'hoa hoc': 'Hóa học',
+    'hóa hoc': 'Hóa học',
+    van: 'Ngữ văn',
+    'văn': 'Ngữ văn',
+    anh: 'Tiếng Anh',
+    'tieng anh': 'Tiếng Anh',
+  };
+  return aliases[key] || raw;
+}
+
 function openInputPicker(event) {
   try {
     event.currentTarget.showPicker?.();
@@ -741,8 +757,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
   const subjectOptions = useMemo(() => {
     const values = new Set([
-      ...timetables.map((item) => item.subject_name),
-      ...grades.map((item) => item.subject_name),
+      ...timetables.map((item) => normalizeSubjectName(item.subject_name)),
+      ...grades.map((item) => normalizeSubjectName(item.subject_name)),
     ]);
     return Array.from(values).filter(Boolean).sort();
   }, [timetables, grades]);
@@ -1252,6 +1268,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
         body: JSON.stringify({
           ...timetableForm,
+          subject_name: normalizeSubjectName(timetableForm.subject_name),
           day_of_week: Number(timetableForm.day_of_week),
         }),
       });
@@ -1272,6 +1289,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
         body: JSON.stringify({
           ...timetableForm,
+          subject_name: normalizeSubjectName(timetableForm.subject_name),
           day_of_week: Number(timetableForm.day_of_week),
         }),
       });
@@ -1644,7 +1662,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
         body: JSON.stringify({
           student_code: gradeForm.student_code,
-          subject_name: gradeForm.subject_name,
+          subject_name: normalizeSubjectName(gradeForm.subject_name),
           midterm_score: Number(gradeForm.midterm_score || 0),
           final_score: Number(gradeForm.final_score || 0),
         }),
