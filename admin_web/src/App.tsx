@@ -262,6 +262,35 @@ function feeMapToLines(value) {
     .join('\n');
 }
 
+function periodSortValue(period) {
+  const match = String(period || '').match(/\d+/);
+  return match ? Number(match[0]) : 999;
+}
+
+function normalizePeriod(period) {
+  const raw = String(period || '').trim();
+  if (!raw) return '';
+  const match = raw.match(/\d+/);
+  return match ? `Tiết ${Number(match[0])}` : raw;
+}
+
+function defaultTimeForPeriod(period) {
+  const slot = periodSortValue(period);
+  const defaults = {
+    1: ['07:30', '08:15'],
+    2: ['08:20', '09:05'],
+    3: ['09:20', '10:05'],
+    4: ['10:10', '10:55'],
+    5: ['11:00', '11:45'],
+    6: ['13:30', '14:15'],
+    7: ['14:20', '15:05'],
+    8: ['15:20', '16:05'],
+    9: ['16:10', '16:55'],
+    10: ['17:00', '17:45'],
+  };
+  return defaults[slot] || ['07:30', '08:15'];
+}
+
 function FieldLabel({ children }) {
   return <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">{children}</label>;
 }
@@ -289,6 +318,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   });
   const [timetables, setTimetables] = useState([]);
   const [selectedTimetable, setSelectedTimetable] = useState(null);
+  const [selectedTimetableClass, setSelectedTimetableClass] = useState('');
   const [timetableForm, setTimetableForm] = useState({
     class_id: '',
     subject_name: '',
@@ -668,6 +698,31 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     ]);
     return Array.from(values).filter(Boolean).sort();
   }, [students, timetables, fees]);
+
+  const timetableClassOptions = useMemo(() => {
+    const values = new Set([
+      ...timetables.map((item) => item.class_id),
+      ...students.map((student) => student.class_name),
+    ]);
+    return Array.from(values).filter(Boolean).sort();
+  }, [students, timetables]);
+
+  const activeTimetableClass =
+    selectedTimetableClass || timetableForm.class_id || timetableClassOptions[0] || '';
+
+  const activeClassTimetables = useMemo(() => {
+    if (!activeTimetableClass) return [];
+    return timetables.filter((item) => item.class_id === activeTimetableClass);
+  }, [timetables, activeTimetableClass]);
+
+  const timetablePeriods = useMemo(() => {
+    const values = new Set(Array.from({ length: 10 }, (_, index) => `Tiết ${index + 1}`));
+    activeClassTimetables.forEach((item) => {
+      const normalized = normalizePeriod(item.period);
+      if (normalized) values.add(normalized);
+    });
+    return Array.from(values).sort((a, b) => periodSortValue(a) - periodSortValue(b));
+  }, [activeClassTimetables]);
 
   const subjectOptions = useMemo(() => {
     const values = new Set(timetables.map((item) => item.subject_name));
@@ -1182,6 +1237,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           day_of_week: Number(timetableForm.day_of_week),
         }),
       });
+      setSelectedTimetableClass(timetableForm.class_id || activeTimetableClass);
       await loadTimetables();
     } catch (error) {
       setMessage(error.message);
@@ -1201,6 +1257,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           day_of_week: Number(timetableForm.day_of_week),
         }),
       });
+      setSelectedTimetableClass(timetableForm.class_id || activeTimetableClass);
       setEditingTimetableId(null);
       setTimetableForm({
         class_id: '',
@@ -1219,6 +1276,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   }
 
   function startEditTimetable(item) {
+    setSelectedTimetableClass(item.class_id || '');
     setSelectedTimetable(item);
     setEditingTimetableId(item.id);
     setTimetableForm({
@@ -1236,7 +1294,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   function cancelEditTimetable() {
     setEditingTimetableId(null);
     setTimetableForm({
-      class_id: '',
+      class_id: activeTimetableClass || '',
       subject_name: '',
       day_of_week: 1,
       start_time: '07:30',
@@ -1247,6 +1305,56 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     });
   }
 
+  function chooseTimetableClass(classId) {
+    setSelectedTimetableClass(classId);
+    setSelectedTimetable(null);
+    setEditingTimetableId(null);
+    setTimetableForm((prev) => ({
+      ...prev,
+      class_id: classId,
+      subject_name: '',
+      period: '',
+    }));
+  }
+
+  function selectTimetableSlot(day, period) {
+    if (!activeTimetableClass) return;
+    const normalizedPeriod = normalizePeriod(period);
+    const existing = activeClassTimetables.find(
+      (item) =>
+        Number(item.day_of_week) === Number(day) &&
+        normalizePeriod(item.period) === normalizedPeriod,
+    );
+
+    if (existing) {
+      startEditTimetable(existing);
+      return;
+    }
+
+    const [startTime, endTime] = defaultTimeForPeriod(normalizedPeriod);
+    setSelectedTimetable(null);
+    setEditingTimetableId(null);
+    setTimetableForm({
+      class_id: activeTimetableClass,
+      subject_name: '',
+      day_of_week: Number(day),
+      start_time: startTime,
+      end_time: endTime,
+      room: '',
+      teacher_name: '',
+      period: normalizedPeriod,
+    });
+  }
+
+  function findTimetableSlot(day, period) {
+    const normalizedPeriod = normalizePeriod(period);
+    return activeClassTimetables.find(
+      (item) =>
+        Number(item.day_of_week) === Number(day) &&
+        normalizePeriod(item.period) === normalizedPeriod,
+    );
+  }
+
   async function deleteTimetable(id) {
     if (!window.confirm('Xác nhận xóa thời khóa biểu?')) return;
     try {
@@ -1255,6 +1363,15 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
       });
       if (selectedTimetable?.id === id) setSelectedTimetable(null);
+      if (editingTimetableId === id) {
+        setEditingTimetableId(null);
+        setTimetableForm((prev) => ({
+          ...prev,
+          subject_name: '',
+          room: '',
+          teacher_name: '',
+        }));
+      }
       await loadTimetables();
     } catch (error) {
       setMessage(error.message);
@@ -1992,185 +2109,234 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
         {tab === 'timetable' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Quản lý thời khóa biểu (Thứ 2 - Thứ 7)</h2>
-            <form onSubmit={editingTimetableId ? updateTimetable : createTimetable} className="mb-4 grid gap-2 md:grid-cols-4">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <FieldLabel>Lớp</FieldLabel>
-                <input
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="VD: 10A1"
-                  list="class-options"
-                  value={timetableForm.class_id}
-                  onChange={(e) =>
-                    setTimetableForm((prev) => ({ ...prev, class_id: e.target.value }))
-                  }
-                />
+                <h2 className="text-lg font-semibold">Thời khóa biểu theo lớp</h2>
+                <p className="text-sm text-slate-500">
+                  Chọn lớp rồi bấm trực tiếp vào ô tiết học để thêm mới hoặc sửa.
+                </p>
               </div>
-              <div>
-                <FieldLabel>Môn học</FieldLabel>
-                <input
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="VD: Toán"
-                  list="subject-options"
-                  value={timetableForm.subject_name}
-                  onChange={(e) =>
-                    setTimetableForm((prev) => ({ ...prev, subject_name: e.target.value }))
-                  }
-                />
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+                {activeTimetableClass || 'Chưa chọn lớp'} • {activeClassTimetables.length} tiết
               </div>
-              <div>
-                <FieldLabel>Thứ</FieldLabel>
-                <select
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  value={timetableForm.day_of_week}
-                  onChange={(e) =>
-                    setTimetableForm((prev) => ({ ...prev, day_of_week: Number(e.target.value) }))
-                  }
-                >
-                  {[1, 2, 3, 4, 5, 6].map((d) => (
-                    <option key={d} value={d}>{`Thứ ${d + 1}`}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <FieldLabel>Tiết học</FieldLabel>
-                <input
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="VD: Tiết 1"
-                  value={timetableForm.period}
-                  onChange={(e) =>
-                    setTimetableForm((prev) => ({ ...prev, period: e.target.value }))
-                  }
-                />
-              </div>
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                type="time"
-                value={timetableForm.start_time}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, start_time: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                type="time"
-                value={timetableForm.end_time}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, end_time: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Phòng"
-                value={timetableForm.room}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, room: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Giáo viên"
-                value={timetableForm.teacher_name}
-                onChange={(e) =>
-                  setTimetableForm((prev) => ({ ...prev, teacher_name: e.target.value }))
-                }
-              />
-              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
-                {editingTimetableId ? 'Cập nhật thời khóa biểu' : 'Thêm thời khóa biểu'}
-              </button>
-              {editingTimetableId ? (
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-2">
+              {timetableClassOptions.map((classId) => (
                 <button
+                  key={classId}
                   type="button"
-                  onClick={cancelEditTimetable}
-                  className="rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+                  onClick={() => chooseTimetableClass(classId)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ring-1 ${
+                    activeTimetableClass === classId
+                      ? 'bg-blue-600 text-white ring-blue-600'
+                      : 'bg-white text-slate-700 ring-slate-200 hover:bg-blue-50'
+                  }`}
                 >
-                  Hủy sửa
+                  {classId}
                 </button>
-              ) : null}
-            </form>
-            <ModuleSearch
-              value={timetableSearch}
-              onChange={setTimetableSearch}
-              placeholder="Tìm theo lớp, môn học, thứ, tiết, giờ, giáo viên, phòng..."
-              count={filteredTimetables.length}
-              total={timetables.length}
-            />
-            {selectedTimetable ? (
-              <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
-                <div className="mb-2 flex items-start justify-between gap-3">
+              ))}
+              <input
+                className="min-w-36 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Nhập lớp mới"
+                list="class-options"
+                value={timetableForm.class_id}
+                onChange={(e) => {
+                  const classId = e.target.value;
+                  setSelectedTimetableClass(classId);
+                  setTimetableForm((prev) => ({ ...prev, class_id: classId }));
+                }}
+              />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                {activeTimetableClass ? (
+                  <table className="min-w-[920px] table-fixed text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="w-24 border-b border-slate-200 px-3 py-3">Tiết</th>
+                        {[1, 2, 3, 4, 5, 6].map((day) => (
+                          <th key={day} className="border-b border-slate-200 px-3 py-3">
+                            {dayLabel(day)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {timetablePeriods.map((period) => (
+                        <tr key={period} className="border-b border-slate-100 last:border-b-0">
+                          <td className="bg-slate-50 px-3 py-3 align-top font-semibold text-slate-700">
+                            {period}
+                          </td>
+                          {[1, 2, 3, 4, 5, 6].map((day) => {
+                            const item = findTimetableSlot(day, period);
+                            const selected = item?.id && selectedTimetable?.id === item.id;
+                            return (
+                              <td key={`${period}-${day}`} className="h-28 border-l border-slate-100 p-2 align-top">
+                                <button
+                                  type="button"
+                                  onClick={() => selectTimetableSlot(day, period)}
+                                  className={`h-full min-h-24 w-full rounded-lg border p-2 text-left transition ${
+                                    item
+                                      ? selected
+                                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                        : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                                      : 'border-dashed border-slate-200 bg-slate-50 text-slate-400 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+                                  }`}
+                                >
+                                  {item ? (
+                                    <span className="block">
+                                      <span className="block truncate font-bold text-slate-950">{item.subject_name}</span>
+                                      <span className="mt-1 block text-xs text-slate-500">
+                                        {String(item.start_time).slice(0, 5)}-{String(item.end_time).slice(0, 5)}
+                                      </span>
+                                      <span className="mt-2 block line-clamp-2 text-xs text-slate-600">
+                                        {item.teacher_name || 'Chưa có giáo viên'}
+                                      </span>
+                                      <span className="mt-1 block truncate text-xs text-slate-500">
+                                        {item.room || 'Chưa có phòng'}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="flex h-full items-center justify-center text-xs font-semibold">
+                                      + Thêm tiết
+                                    </span>
+                                  )}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <EmptyState message="Chọn hoặc nhập một lớp để bắt đầu thêm thời khóa biểu." />
+                )}
+              </div>
+
+              <form onSubmit={editingTimetableId ? updateTimetable : createTimetable} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3">
+                  <h3 className="font-semibold text-slate-950">
+                    {editingTimetableId ? 'Sửa tiết học' : 'Thêm tiết học'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Bấm vào ô trong bảng để tự điền lớp, thứ và tiết.
+                  </p>
+                </div>
+                <div className="grid gap-3">
                   <div>
-                    <div className="text-xs font-semibold uppercase text-blue-700">Chi tiết tiết học</div>
-                    <div className="text-lg font-bold text-slate-950">
-                      {selectedTimetable.subject_name} - {selectedTimetable.class_id}
+                    <FieldLabel>Lớp</FieldLabel>
+                    <input
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="VD: 10A1"
+                      list="class-options"
+                      value={timetableForm.class_id}
+                      onChange={(e) => {
+                        const classId = e.target.value;
+                        setSelectedTimetableClass(classId);
+                        setTimetableForm((prev) => ({ ...prev, class_id: classId }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Môn học</FieldLabel>
+                    <input
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="VD: Toán"
+                      list="subject-options"
+                      value={timetableForm.subject_name}
+                      onChange={(e) =>
+                        setTimetableForm((prev) => ({ ...prev, subject_name: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <FieldLabel>Thứ</FieldLabel>
+                      <select
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        value={timetableForm.day_of_week}
+                        onChange={(e) =>
+                          setTimetableForm((prev) => ({ ...prev, day_of_week: Number(e.target.value) }))
+                        }
+                      >
+                        {[1, 2, 3, 4, 5, 6].map((d) => (
+                          <option key={d} value={d}>{dayLabel(d)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <FieldLabel>Tiết</FieldLabel>
+                      <input
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Tiết 1"
+                        value={timetableForm.period}
+                        onChange={(e) =>
+                          setTimetableForm((prev) => ({ ...prev, period: e.target.value }))
+                        }
+                      />
                     </div>
                   </div>
-                  <button type="button" onClick={() => setSelectedTimetable(null)} className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-                    Đóng
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      type="time"
+                      value={timetableForm.start_time}
+                      onChange={(e) =>
+                        setTimetableForm((prev) => ({ ...prev, start_time: e.target.value }))
+                      }
+                    />
+                    <input
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      type="time"
+                      value={timetableForm.end_time}
+                      onChange={(e) =>
+                        setTimetableForm((prev) => ({ ...prev, end_time: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <input
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Phòng"
+                    value={timetableForm.room}
+                    onChange={(e) =>
+                      setTimetableForm((prev) => ({ ...prev, room: e.target.value }))
+                    }
+                  />
+                  <input
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Giáo viên"
+                    value={timetableForm.teacher_name}
+                    onChange={(e) =>
+                      setTimetableForm((prev) => ({ ...prev, teacher_name: e.target.value }))
+                    }
+                  />
+                  <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+                    {editingTimetableId ? 'Cập nhật tiết học' : 'Thêm tiết học'}
                   </button>
+                  {editingTimetableId ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelEditTimetable}
+                        className="rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+                      >
+                        Hủy sửa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTimetable(editingTimetableId)}
+                        className="rounded-lg bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-700"
+                      >
+                        Xóa tiết
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="grid gap-2 md:grid-cols-4">
-                  <div><strong>Thứ:</strong> {dayLabel(selectedTimetable.day_of_week)}</div>
-                  <div><strong>Tiết:</strong> {selectedTimetable.period || '-'}</div>
-                  <div><strong>Giờ:</strong> {String(selectedTimetable.start_time).slice(0, 5)} - {String(selectedTimetable.end_time).slice(0, 5)}</div>
-                  <div><strong>Phòng:</strong> {selectedTimetable.room || '-'}</div>
-                  <div className="md:col-span-4"><strong>Giáo viên:</strong> {selectedTimetable.teacher_name || '-'}</div>
-                </div>
-              </div>
-            ) : null}
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-slate-500">
-                    <th className="py-2">Lớp</th>
-                    <th className="py-2">Môn</th>
-                    <th className="py-2">Thứ</th>
-                    <th className="py-2">Tiết</th>
-                    <th className="py-2">Giờ</th>
-                    <th className="py-2">GV/Phòng</th>
-                    <th className="py-2">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTimetables.map((t) => (
-                    <tr
-                      key={t.id}
-                      onClick={() => setSelectedTimetable(t)}
-                      className={`cursor-pointer border-b hover:bg-blue-50 ${selectedTimetable?.id === t.id ? 'bg-blue-50' : ''}`}
-                    >
-                      <td className="py-2">{t.class_id}</td>
-                      <td className="py-2">{t.subject_name}</td>
-                      <td className="py-2">{dayLabel(t.day_of_week)}</td>
-                      <td className="py-2">{t.period || '-'}</td>
-                      <td className="py-2">{`${String(t.start_time).slice(0, 5)}-${String(t.end_time).slice(0, 5)}`}</td>
-                      <td className="py-2">{`${t.teacher_name || '-'} / ${t.room || '-'}`}</td>
-                      <td className="py-2">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              startEditTimetable(t);
-                            }}
-                            className="rounded bg-amber-100 px-2 py-1 text-amber-700"
-                          >
-                            Sửa
-                          </button>
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteTimetable(t.id);
-                            }}
-                            className="rounded bg-rose-100 px-2 py-1 text-rose-700"
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              </form>
             </div>
-            {filteredTimetables.length === 0 ? <EmptyState message="Chưa có tiết học phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 
