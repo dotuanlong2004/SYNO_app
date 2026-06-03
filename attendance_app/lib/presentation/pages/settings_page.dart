@@ -27,10 +27,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _changePassword() async {
+    if (_oldPasswordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng nhập mật khẩu hiện tại.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    if (_newPasswordController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mật khẩu mới tối thiểu 6 ký tự.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
     if (_newPasswordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Mật khẩu mới không khớp'),
+          content: Text('Mật khẩu xác nhận không khớp.'),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -58,7 +78,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Đổi mật khẩu thành công'),
+              content: Text('Đổi mật khẩu thành công.'),
               backgroundColor: AppTheme.successColor,
             ),
           );
@@ -69,8 +89,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi: $e'),
+          const SnackBar(
+            content: Text('Đổi mật khẩu thất bại. Vui lòng thử lại.'),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -85,7 +105,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Đăng xuất'),
-        content: const Text('Bạn có chắc muốn đăng xuất?'),
+        content: const Text('Bạn có chắc muốn đăng xuất không?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -121,7 +141,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Cài đặt')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           // Thông tin tài khoản
           Card(

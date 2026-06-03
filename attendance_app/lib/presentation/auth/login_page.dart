@@ -47,7 +47,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Tài khoản Admin/Giáo viên vui lòng đăng nhập tại cổng quản trị web.',
+                'Tài khoản nhà trường vui lòng đăng nhập tại cổng quản trị web.',
               ),
               duration: Duration(seconds: 5),
               backgroundColor: AppTheme.accentOrange,

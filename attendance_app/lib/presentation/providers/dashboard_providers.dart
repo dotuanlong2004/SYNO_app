@@ -177,14 +177,14 @@ class AuthController extends Notifier<AuthState> {
   String _buildSignInErrorMessage(Object error) {
     if (error is DioException) {
       if (_isNetworkError(error)) {
-        return 'Không thể kết nối máy chủ. Hãy kiểm tra backend tại ${ApiConfig.baseUrl} rồi thử lại.';
+        return 'Không thể kết nối máy chủ của SYNO. Vui lòng thử lại sau.';
       }
       final statusCode = error.response?.statusCode;
       if (statusCode == 401) {
         return 'Email hoặc mật khẩu không đúng.';
       }
       if (statusCode != null) {
-        return 'Đăng nhập thất bại (HTTP $statusCode).';
+        return 'Đăng nhập thất bại. Vui lòng thử lại.';
       }
     }
     return 'Đăng nhập thất bại. Vui lòng thử lại.';

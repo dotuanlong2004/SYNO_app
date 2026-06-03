@@ -14,6 +14,71 @@ import '../providers/student_info_provider.dart';
 import '../widgets/brand_logo.dart';
 import 'settings_page.dart';
 
+const double _listBottomPadding = 96;
+
+String _formatViDate(DateTime value) {
+  return DateFormat('dd/MM/yyyy').format(value.toLocal());
+}
+
+String _formatViDateTime(DateTime value) {
+  return DateFormat('dd/MM/yyyy HH:mm').format(value.toLocal());
+}
+
+String _formatViTime(DateTime value) {
+  return DateFormat('HH:mm').format(value.toLocal());
+}
+
+String _senderDisplayName(ChatMessage message) {
+  final role = message.senderRole.toLowerCase();
+  if (role == 'parent') return 'Phụ huynh';
+  return 'Nhà trường';
+}
+
+String _attendanceTypeLabel(AttendanceRecord record) {
+  return record.logType == AttendanceLogType.checkOut ? 'Ra' : 'Vào';
+}
+
+String _attendanceStatusLabel(AttendanceRecord record) {
+  switch (record.status) {
+    case AttendanceStatus.late:
+      return 'Muộn';
+    case AttendanceStatus.onTime:
+      return 'Đúng giờ';
+    case AttendanceStatus.leave:
+      return record.logType == AttendanceLogType.checkOut ? 'Ra' : 'Đúng giờ';
+  }
+}
+
+String _naturalEventContent(String content) {
+  if (content.trim().toLowerCase() == 'cho các học sinh đi chơi') {
+    return 'Nhà trường tổ chức hoạt động tham quan cho học sinh lớp 10C2.';
+  }
+  return content;
+}
+
+Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Đăng xuất'),
+      content: const Text('Bạn có chắc muốn đăng xuất không?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Đăng xuất'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    await ref.read(authControllerProvider.notifier).signOut();
+  }
+}
+
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
@@ -37,7 +102,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final titles = <String>[
       'Tổng quan',
       'Lịch sử',
-      'Thời khóa biểu',
+      'Lịch học',
       'Sự kiện',
       'Cá nhân',
     ];
@@ -89,30 +154,53 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       ),
       endDrawer: _buildEndDrawer(context),
       body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            final slide = Tween<Offset>(
-              begin: const Offset(0.025, 0),
-              end: Offset.zero,
-            ).animate(animation);
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(position: slide, child: child),
-            );
-          },
-          child: KeyedSubtree(
-            key: ValueKey<int>(selectedIndex),
-            child: pages[selectedIndex],
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: MediaQuery.textScalerOf(
+              context,
+            ).clamp(maxScaleFactor: 1.08),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final slide = Tween<Offset>(
+                begin: const Offset(0.025, 0),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<int>(selectedIndex),
+              child: pages[selectedIndex],
+            ),
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (value) => setState(() => _tabIndex = value),
-        destinations: destinations,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: MediaQuery.textScalerOf(
+              context,
+            ).clamp(maxScaleFactor: 1.0),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: NavigationBar(
+              height: 68,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (value) =>
+                  setState(() => _tabIndex = value),
+              destinations: destinations,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -198,7 +286,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             title: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
             onTap: () {
               Navigator.pop(context);
-              ref.read(authControllerProvider.notifier).signOut();
+              _confirmSignOut(context, ref);
             },
           ),
         ],
@@ -309,7 +397,7 @@ class _OverviewTab extends ConsumerWidget {
         } catch (_) {}
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
         children: <Widget>[
           // ── Ngày hôm nay ─────────────────────────────────────────
           Text(
@@ -412,57 +500,23 @@ class _OverviewTab extends ConsumerWidget {
                   const SizedBox(height: 14),
                   const Divider(color: Colors.white24, height: 1),
                   const SizedBox(height: 12),
-                  Row(
-                    children: todayRecords.take(4).map((r) {
-                      final isIn = r.logType == AttendanceLogType.checkIn;
-                      return Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withAlpha(30),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                isIn
-                                    ? Icons.login_rounded
-                                    : Icons.logout_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                DateFormat(
-                                  'HH:mm',
-                                ).format(r.timestamp.toLocal()),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                isIn ? 'Vào' : 'Ra',
-                                style: const TextStyle(
-                                  color: Color(0xFFFFE0B2),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
+                  ...todayRecords.take(3).map(
+                    (r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        'Đã điểm danh ${_attendanceTypeLabel(r).toLowerCase()} lúc ${_formatViTime(r.timestamp)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ),
                   ),
                 ] else ...[
                   const SizedBox(height: 10),
                   const Text(
-                    'Chưa có lượt điểm danh hôm nay',
+                    'Chưa có lượt điểm danh hôm nay.',
                     style: TextStyle(color: Color(0xFFFFE0B2), fontSize: 13),
                   ),
                 ],
@@ -609,7 +663,7 @@ class _TodayRecordTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCheckIn = record.logType == AttendanceLogType.checkIn;
-    final time = DateFormat('HH:mm').format(record.timestamp.toLocal());
+    final time = _formatViTime(record.timestamp);
     final label = isCheckIn ? 'Vào' : 'Ra';
     final chipColor = isCheckIn
         ? const Color(0xFF16A34A)
@@ -658,6 +712,53 @@ class _TodayRecordTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickActionChip extends StatelessWidget {
+  const _QuickActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE3EBF8)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: AppTheme.primaryColor, size: 20),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -751,28 +852,24 @@ class _HistoryTab extends ConsumerWidget {
     return historyAsync.when(
       data: (records) {
         if (records.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(Icons.inbox_outlined, color: Colors.grey[400], size: 56),
-                const SizedBox(height: 8),
-                Text(
-                  'Chưa có dữ liệu điểm danh',
-                  style: TextStyle(color: Colors.grey[500]),
-                ),
-              ],
-            ),
+          return const _EmptyState(
+            icon: Icons.inbox_outlined,
+            message: 'Chưa có lịch sử điểm danh trong khoảng thời gian này.',
           );
         }
 
         final grouped = <String, List<AttendanceRecord>>{};
         for (final record in records) {
-          final key = DateFormat('dd/MM/yyyy').format(record.timestamp);
+          final key = _formatViDate(record.timestamp);
           grouped.putIfAbsent(key, () => <AttendanceRecord>[]).add(record);
         }
 
-        final dates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+        final dates = grouped.keys.toList()
+          ..sort((a, b) {
+            final da = DateFormat('dd/MM/yyyy').parse(a);
+            final db = DateFormat('dd/MM/yyyy').parse(b);
+            return db.compareTo(da);
+          });
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -780,7 +877,7 @@ class _HistoryTab extends ConsumerWidget {
             await ref.read(attendanceHistoryProvider.future);
           },
           child: ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
             itemCount: dates.length,
             itemBuilder: (context, index) {
               final date = dates[index];
@@ -821,10 +918,11 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final localTime = DateFormat('HH:mm').format(record.timestamp);
-    final isOut = record.status == AttendanceStatus.leave;
+    final localTime = _formatViTime(record.timestamp);
+    final isOut = record.logType == AttendanceLogType.checkOut;
     final chipColor = isOut ? const Color(0xFFF59E0B) : const Color(0xFF16A34A);
-    final chipLabel = isOut ? 'Ra' : 'Vào';
+    final chipLabel = _attendanceTypeLabel(record);
+    final statusLabel = _attendanceStatusLabel(record);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -856,8 +954,14 @@ class _HistoryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Học sinh ${record.studentId}'),
-                Text(localTime, style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  '$localTime • $chipLabel',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  statusLabel,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
@@ -982,7 +1086,7 @@ class _TimetableTabState extends ConsumerState<_TimetableTab>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Chưa có thời khóa biểu',
+                  'Hôm nay chưa có tiết học nào được cập nhật.',
                   style: TextStyle(color: Colors.grey[500], fontSize: 15),
                 ),
               ],
@@ -1006,7 +1110,8 @@ class _TimetableTabState extends ConsumerState<_TimetableTab>
               color: kGreen,
               child: TabBar(
                 controller: _tabController,
-                isScrollable: false,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white60,
                 indicatorColor: AppTheme.primaryOrange,
@@ -1054,7 +1159,12 @@ class _TimetableTabState extends ConsumerState<_TimetableTab>
                       await ref.read(timetableProvider.future);
                     },
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+                      padding: const EdgeInsets.fromLTRB(
+                        12,
+                        10,
+                        12,
+                        _listBottomPadding,
+                      ),
                       children: [
                         // Header ngày
                         Container(
@@ -1092,8 +1202,8 @@ class _TimetableTabState extends ConsumerState<_TimetableTab>
                                     'Hôm nay',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ),
@@ -1373,7 +1483,7 @@ class _FeesTab extends ConsumerWidget {
         if (fees.isEmpty) {
           return _EmptyState(
             icon: Icons.receipt_long_rounded,
-            message: 'Chưa có thông báo học phí',
+            message: 'Chưa có khoản thu nào được cập nhật.',
           );
         }
         final totalAmount = fees.fold<double>(
@@ -1393,7 +1503,7 @@ class _FeesTab extends ConsumerWidget {
             await ref.read(feeNoticesProvider.future);
           },
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
             itemCount: fees.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -1490,7 +1600,7 @@ class _FeeSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _FeeMetric(
-            label: 'Còn cần theo dõi',
+            label: 'Còn phải thanh toán',
             value: '${formatter.format(pendingAmount)} đ',
             wide: true,
           ),
@@ -1625,7 +1735,7 @@ class _FeeNoticeCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Kỳ thu: ${fee.paidAt == null ? "Chưa xác định" : DateFormat('MM/yyyy').format(fee.paidAt!)}',
+                        'Hạn thanh toán: ${fee.paidAt == null ? "Chưa cập nhật" : _formatViDate(fee.paidAt!)}',
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                     ],
@@ -1659,7 +1769,7 @@ class _FeeNoticeCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Tổng học phí',
+                  'Tổng khoản thu',
                   style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
                 ),
                 Text(
@@ -1711,8 +1821,8 @@ class _FeeNoticeCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   fee.paidAt == null
-                      ? 'Chưa thanh toán'
-                      : 'Thanh toán: ${DateFormat('dd/MM/yyyy').format(fee.paidAt!)}',
+                      ? 'Chưa có hạn thanh toán'
+                      : 'Hạn thanh toán: ${_formatViDate(fee.paidAt!)}',
                   style: TextStyle(color: Colors.grey[500], fontSize: 12),
                 ),
                 if (fee.paymentMethod != null) ...[
@@ -1787,7 +1897,7 @@ class _EventsTab extends ConsumerWidget {
             await ref.read(eventsProvider.future);
           },
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
@@ -1855,7 +1965,7 @@ class _EventsTab extends ConsumerWidget {
                                 const Spacer(),
                                 if (date != null)
                                   Text(
-                                    DateFormat('dd/MM/yyyy').format(date),
+                                    _formatViDate(date),
                                     style: TextStyle(
                                       color: Colors.grey[500],
                                       fontSize: 12,
@@ -1874,7 +1984,7 @@ class _EventsTab extends ConsumerWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              item.content,
+                              _naturalEventContent(item.content),
                               style: TextStyle(
                                 color: Colors.grey[700],
                                 fontSize: 13,
@@ -2004,13 +2114,63 @@ class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
           if (date != null) ...[
             const SizedBox(height: 8),
             Text(
-              DateFormat('dd/MM/yyyy HH:mm').format(date),
+              _formatViDateTime(date),
               style: TextStyle(color: Colors.grey[500], fontSize: 12),
             ),
           ],
+
+          Row(
+            children: [
+              _QuickActionChip(
+                icon: Icons.receipt_long_rounded,
+                label: 'Học phí',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('Học phí')),
+                      backgroundColor: AppTheme.lightGrayBackground,
+                      body: const _FeesTab(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _QuickActionChip(
+                icon: Icons.calendar_month_rounded,
+                label: 'Lịch học',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('Lịch học')),
+                      backgroundColor: AppTheme.lightGrayBackground,
+                      body: const _TimetableTab(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _QuickActionChip(
+                icon: Icons.campaign_rounded,
+                label: 'Thông báo',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('Thông báo')),
+                      backgroundColor: AppTheme.lightGrayBackground,
+                      body: const _NewsTab(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
           const Divider(height: 24),
           Text(
-            item.content,
+            _naturalEventContent(item.content),
             style: const TextStyle(fontSize: 15, height: 1.6),
           ),
           const Divider(height: 28),
@@ -2055,9 +2215,7 @@ class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
                         if (comment.createdAt != null) ...[
                           const SizedBox(height: 6),
                           Text(
-                            DateFormat(
-                              'dd/MM/yyyy HH:mm',
-                            ).format(comment.createdAt!),
+                            _formatViDateTime(comment.createdAt!),
                             style: TextStyle(
                               color: Colors.grey[500],
                               fontSize: 11,
@@ -2129,12 +2287,19 @@ class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
   }
 }
 
-class _NewsTab extends ConsumerWidget {
+class _NewsTab extends ConsumerStatefulWidget {
   const _NewsTab();
+
+  @override
+  ConsumerState<_NewsTab> createState() => _NewsTabState();
+}
+
+class _NewsTabState extends ConsumerState<_NewsTab> {
+  String _filter = 'Tất cả';
 
   IconData get _feedIcon => Icons.campaign_rounded;
 
-  String get _emptyMessage => 'Chưa có thông báo';
+  String get _emptyMessage => 'Chưa có thông báo mới.';
 
   String get _errorMessage => 'Không thể tải thông báo';
 
@@ -2163,10 +2328,22 @@ class _NewsTab extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final announcementsAsync = ref.watch(announcementsProvider);
     return announcementsAsync.when(
       data: (items) {
+        final visibleItems = items.where((item) {
+          final text = '${item.title} ${item.content}'.toLowerCase();
+          return switch (_filter) {
+            'Điểm danh' => text.contains('điểm danh'),
+            'Học phí' => text.contains('học phí') || text.contains('khoản thu'),
+            'Nhà trường' => !text.contains('điểm danh') &&
+                !text.contains('học phí') &&
+                !text.contains('khoản thu'),
+            _ => true,
+          };
+        }).toList();
+
         if (items.isEmpty) {
           return _EmptyState(icon: _feedIcon, message: _emptyMessage);
         }
@@ -2176,10 +2353,39 @@ class _NewsTab extends ConsumerWidget {
             await ref.read(announcementsProvider.future);
           },
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            itemCount: items.length,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
+            itemCount: visibleItems.isEmpty ? 2 : visibleItems.length + 1,
             itemBuilder: (context, index) {
-              final item = items[index];
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['Tất cả', 'Điểm danh', 'Học phí', 'Nhà trường']
+                          .map(
+                            (label) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(label),
+                                selected: _filter == label,
+                                onSelected: (_) =>
+                                    setState(() => _filter = label),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                );
+              }
+              if (visibleItems.isEmpty) {
+                return const _EmptyState(
+                  icon: Icons.campaign_rounded,
+                  message: 'Chưa có thông báo mới.',
+                );
+              }
+              final item = visibleItems[index - 1];
               final isNew =
                   item.publishedAt != null &&
                   DateTime.now().difference(item.publishedAt!).inDays < 3;
@@ -2276,7 +2482,7 @@ class _NewsTab extends ConsumerWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        item.content,
+                        _naturalEventContent(item.content),
                         style: TextStyle(color: Colors.grey[700], fontSize: 13),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -2293,9 +2499,7 @@ class _NewsTab extends ConsumerWidget {
                           Text(
                             item.publishedAt == null
                                 ? ''
-                                : DateFormat(
-                                    'dd/MM/yyyy HH:mm',
-                                  ).format(item.publishedAt!),
+                                : _formatViDateTime(item.publishedAt!),
                             style: TextStyle(
                               color: Colors.grey[400],
                               fontSize: 11,
@@ -2401,13 +2605,13 @@ class _NewsTab extends ConsumerWidget {
             if (item.publishedAt != null) ...[
               const SizedBox(height: 6),
               Text(
-                DateFormat('dd/MM/yyyy HH:mm').format(item.publishedAt!),
+                _formatViDateTime(item.publishedAt!),
                 style: TextStyle(color: Colors.grey[500], fontSize: 12),
               ),
             ],
             const Divider(height: 24),
             Text(
-              item.content,
+              _naturalEventContent(item.content),
               style: const TextStyle(fontSize: 15, height: 1.6),
             ),
           ],
@@ -2418,8 +2622,15 @@ class _NewsTab extends ConsumerWidget {
 }
 
 // ─── Bảng Điểm ───────────────────────────────────────────────────────────────
-class _GradesTab extends ConsumerWidget {
+class _GradesTab extends ConsumerStatefulWidget {
   const _GradesTab();
+
+  @override
+  ConsumerState<_GradesTab> createState() => _GradesTabState();
+}
+
+class _GradesTabState extends ConsumerState<_GradesTab> {
+  String _semesterFilter = 'Cả năm';
 
   Color _scoreColor(double score) {
     if (score >= 8.0) return const Color(0xFF16A34A);
@@ -2428,8 +2639,39 @@ class _GradesTab extends ConsumerWidget {
     return const Color(0xFFDC2626);
   }
 
+  bool _isSemester(GradeRecord grade, String semester) {
+    final value = grade.semester.trim().toLowerCase();
+    if (semester == '1') {
+      return value == '1' ||
+          value == 'hk1' ||
+          value == 'học kỳ 1' ||
+          value == 'hoc ky 1' ||
+          value.contains('kỳ 1') ||
+          value.contains('ky 1');
+    }
+    if (semester == '2') {
+      return value == '2' ||
+          value == 'hk2' ||
+          value == 'học kỳ 2' ||
+          value == 'hoc ky 2' ||
+          value.contains('kỳ 2') ||
+          value.contains('ky 2');
+    }
+    return false;
+  }
+
+  bool _matchesSemester(GradeRecord grade) {
+    if (_semesterFilter == 'Học kỳ 1') {
+      return _isSemester(grade, '1');
+    }
+    if (_semesterFilter == 'Học kỳ 2') {
+      return _isSemester(grade, '2');
+    }
+    return true;
+  }
+
   double? _termAverage(List<GradeRecord> grades, String semester) {
-    final rows = grades.where((grade) => grade.semester == semester).toList();
+    final rows = grades.where((grade) => _isSemester(grade, semester)).toList();
     if (rows.isEmpty) return null;
     return rows.fold<double>(0, (sum, grade) => sum + grade.subjectAverage) /
         rows.length;
@@ -2437,7 +2679,7 @@ class _GradesTab extends ConsumerWidget {
 
   double _termTotal(List<GradeRecord> grades, String semester) {
     return grades
-        .where((grade) => grade.semester == semester)
+        .where((grade) => _isSemester(grade, semester))
         .fold<double>(0, (sum, grade) => sum + grade.subjectAverage);
   }
 
@@ -2500,16 +2742,17 @@ class _GradesTab extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final gradesAsync = ref.watch(gradesProvider);
     return gradesAsync.when(
       data: (grades) {
         if (grades.isEmpty) {
           return _EmptyState(
             icon: Icons.school_rounded,
-            message: 'Chưa có bảng điểm',
+            message: 'Chưa có bảng điểm được cập nhật.',
           );
         }
+        final visibleGrades = grades.where(_matchesSemester).toList();
         final semester1Average = _termAverage(grades, '1');
         final semester2Average = _termAverage(grades, '2');
         final semester1Total = _termTotal(grades, '1');
@@ -2525,8 +2768,27 @@ class _GradesTab extends ConsumerWidget {
             await ref.read(gradesProvider.future);
           },
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
             children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: ['Học kỳ 1', 'Học kỳ 2', 'Cả năm']
+                      .map(
+                        (label) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(label),
+                            selected: _semesterFilter == label,
+                            onSelected: (_) =>
+                                setState(() => _semesterFilter = label),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
               _summaryCard(
                 title: 'Tổng điểm học kỳ 1',
                 average: semester1Average,
@@ -2571,25 +2833,25 @@ class _GradesTab extends ConsumerWidget {
                       ),
                     ),
                     SizedBox(
-                      width: 46,
+                      width: 64,
                       child: Text(
-                        'HK',
+                        'Học kỳ',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                     ),
                     SizedBox(
-                      width: 60,
+                      width: 72,
                       child: Text(
-                        'GK',
+                        'Giữa kỳ',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                     ),
                     SizedBox(
-                      width: 60,
+                      width: 72,
                       child: Text(
-                        'CK',
+                        'Cuối kỳ',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
@@ -2603,7 +2865,12 @@ class _GradesTab extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               // Rows
-              ...grades.asMap().entries.map((entry) {
+              if (visibleGrades.isEmpty)
+                const _EmptyState(
+                  icon: Icons.school_rounded,
+                  message: 'Chưa có bảng điểm được cập nhật.',
+                ),
+              ...visibleGrades.asMap().entries.map((entry) {
                 final idx = entry.key;
                 final g = entry.value;
                 final isEven = idx % 2 == 0;
@@ -2628,7 +2895,7 @@ class _GradesTab extends ConsumerWidget {
                         ),
                       ),
                       SizedBox(
-                        width: 46,
+                        width: 64,
                         child: Text(
                           g.semester.isEmpty ? '-' : g.semester,
                           textAlign: TextAlign.center,
@@ -2639,7 +2906,7 @@ class _GradesTab extends ConsumerWidget {
                         ),
                       ),
                       SizedBox(
-                        width: 60,
+                        width: 72,
                         child: Center(
                           child: Text(
                             g.midtermScore.toStringAsFixed(1),
@@ -2651,7 +2918,7 @@ class _GradesTab extends ConsumerWidget {
                         ),
                       ),
                       SizedBox(
-                        width: 60,
+                        width: 72,
                         child: Center(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2740,7 +3007,7 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
               if (messages.isEmpty) {
                 return const _EmptyState(
                   icon: Icons.forum_rounded,
-                  message: 'Chưa có tin nhắn',
+                  message: 'Chưa có tin nhắn.',
                 );
               }
               return RefreshIndicator(
@@ -2750,7 +3017,12 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
                 },
                 child: ListView.builder(
                   reverse: true,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    16 + MediaQuery.of(context).viewInsets.bottom,
+                  ),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[messages.length - 1 - index];
@@ -2864,9 +3136,7 @@ class _ChatBubble extends StatelessWidget {
               : CrossAxisAlignment.start,
           children: [
             Text(
-              message.senderName.isEmpty
-                  ? message.senderRole
-                  : message.senderName,
+              _senderDisplayName(message),
               style: TextStyle(
                 color: textColor.withAlpha(210),
                 fontSize: 11,
@@ -2881,7 +3151,7 @@ class _ChatBubble extends StatelessWidget {
             if (message.createdAt != null) ...[
               const SizedBox(height: 5),
               Text(
-                DateFormat('dd/MM HH:mm').format(message.createdAt!),
+                _formatViDateTime(message.createdAt!),
                 style: TextStyle(color: textColor.withAlpha(170), fontSize: 10),
               ),
             ],
@@ -3018,7 +3288,7 @@ class _ProfileTab extends ConsumerWidget {
     );
 
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.only(bottom: _listBottomPadding),
       children: [
         // ── Header profile ────────────────────────────────────────
         Container(
@@ -3168,7 +3438,7 @@ class _ProfileTab extends ConsumerWidget {
                     ),
                   ),
                   title: const Text(
-                    'Trường SYNO',
+                    'Thông tin nhà trường',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                   subtitle: Text(
@@ -3229,8 +3499,7 @@ class _ProfileTab extends ConsumerWidget {
                       color: Colors.red.shade500,
                     ),
                   ),
-                  onTap: () =>
-                      ref.read(authControllerProvider.notifier).signOut(),
+                  onTap: () => _confirmSignOut(context, ref),
                 ),
               ],
             ),
