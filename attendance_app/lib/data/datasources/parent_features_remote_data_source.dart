@@ -19,12 +19,15 @@ class ParentFeaturesRemoteDataSource {
     if (raw.isEmpty) return '';
 
     final base = Uri.parse(ApiConfig.baseUrl);
-    final uri = Uri.tryParse(raw);
+    final cleanedRaw = raw.replaceFirst('/api/v1/uploads/', '/uploads/');
+    final uri = Uri.tryParse(cleanedRaw);
     if (uri == null) return raw;
 
     if (!uri.hasScheme) {
-      return base.resolve(raw).toString();
+      return base.resolve(cleanedRaw).toString();
     }
+
+    final cleanedPath = uri.path.replaceFirst('/api/v1/uploads/', '/uploads/');
 
     if ((uri.host == '127.0.0.1' || uri.host == 'localhost') &&
         base.host != uri.host) {
@@ -33,11 +36,16 @@ class ParentFeaturesRemoteDataSource {
             scheme: base.scheme,
             host: base.host,
             port: base.hasPort ? base.port : null,
+            path: cleanedPath,
           )
           .toString();
     }
 
-    return raw;
+    if (cleanedPath != uri.path) {
+      return uri.replace(path: cleanedPath).toString();
+    }
+
+    return cleanedRaw;
   }
 
   ChatMessage _parseChatMessage(Map<String, dynamic> json) {

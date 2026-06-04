@@ -1,6 +1,7 @@
 param(
     [string]$BackendEnvPath = "$PSScriptRoot\..\..\backend\.env",
-    [string]$ExePath = "$PSScriptRoot\bin\Release\net472\TestCOMReflect.exe"
+    [string]$ExePath = "$PSScriptRoot\bin\Release\net472\TestCOMReflect.exe",
+    [string]$ConfigPath = "$PSScriptRoot\collector-config.json"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,16 +36,13 @@ if (-not (Test-Path -LiteralPath $ExePath)) {
     throw "Chưa thấy file collector đã build: $ExePath"
 }
 
+if (-not (Test-Path -LiteralPath $ConfigPath)) {
+    throw "Không tìm thấy file cấu hình collector: $ConfigPath"
+}
+
 $env:HARDWARE_API_KEY = $hardwareApiKey
-$env:COLLECTOR_REQUIRE_HARDWARE_API_KEY = 'true'
-$env:BACKEND_HARDWARE_SCAN_URL = 'http://localhost:3000/api/v1/hardware/scan'
-$env:SCHOOL_ID = '1'
-$env:AI_X1_DEVICE_IP = '192.168.0.225'
-$env:AI_X1_DEVICE_PORT = '4370'
-$env:AI_X1_MACHINE_NUMBER = '1'
-$env:AI_X1_POLL_MS = '3000'
+$env:COLLECTOR_CONFIG_PATH = $ConfigPath
 
 Write-Host 'Đã nạp HARDWARE_API_KEY từ backend\.env: set'
-Write-Host "Backend: $env:BACKEND_HARDWARE_SCAN_URL"
-Write-Host "Thiết bị: $env:AI_X1_DEVICE_IP`:$env:AI_X1_DEVICE_PORT | School: $env:SCHOOL_ID"
+Write-Host "Config: $env:COLLECTOR_CONFIG_PATH"
 & $ExePath

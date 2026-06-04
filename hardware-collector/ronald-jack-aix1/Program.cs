@@ -7,6 +7,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.IO;
 using FPClockLib;
 
 class Program
@@ -253,17 +254,31 @@ class CollectorConfig
 
     public static CollectorConfig Load()
     {
+        var fileValues = LoadConfigFile();
+        var defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AI_X1_DEVICE_IP"] = "10.160.45.225",
+            ["AI_X1_DEVICE_PORT"] = "4370",
+            ["AI_X1_MACHINE_NUMBER"] = "1",
+            ["AI_X1_COMM_PASSWORD"] = "0",
+            ["SCHOOL_ID"] = "1",
+            ["BACKEND_HARDWARE_SCAN_URL"] = "http://localhost:3000/api/v1/hardware/scan",
+            ["HARDWARE_API_KEY"] = "",
+            ["AI_X1_POLL_MS"] = "3000",
+            ["COLLECTOR_REQUIRE_HARDWARE_API_KEY"] = "true"
+        };
+
         return new CollectorConfig
         {
-            DeviceIp = GetEnv("AI_X1_DEVICE_IP", "192.168.0.225"),
-            DevicePort = GetIntEnv("AI_X1_DEVICE_PORT", 4370),
-            MachineNumber = GetIntEnv("AI_X1_MACHINE_NUMBER", 1),
-            CommPassword = GetIntEnv("AI_X1_COMM_PASSWORD", 0),
-            SchoolId = GetEnv("SCHOOL_ID", "1"),
-            BackendUrl = GetEnv("BACKEND_HARDWARE_SCAN_URL", "http://localhost:3000/api/v1/hardware/scan"),
-            HardwareApiKey = GetEnv("HARDWARE_API_KEY", ""),
-            PollMs = GetIntEnv("AI_X1_POLL_MS", 3000),
-            RequireHardwareApiKey = GetBoolEnv("COLLECTOR_REQUIRE_HARDWARE_API_KEY", true)
+            DeviceIp = GetSetting("AI_X1_DEVICE_IP", defaults, fileValues),
+            DevicePort = GetIntSetting("AI_X1_DEVICE_PORT", defaults, fileValues),
+            MachineNumber = GetIntSetting("AI_X1_MACHINE_NUMBER", defaults, fileValues),
+            CommPassword = GetIntSetting("AI_X1_COMM_PASSWORD", defaults, fileValues),
+            SchoolId = GetSetting("SCHOOL_ID", defaults, fileValues),
+            BackendUrl = GetSetting("BACKEND_HARDWARE_SCAN_URL", defaults, fileValues),
+            HardwareApiKey = GetSetting("HARDWARE_API_KEY", defaults, fileValues),
+            PollMs = GetIntSetting("AI_X1_POLL_MS", defaults, fileValues),
+            RequireHardwareApiKey = GetBoolSetting("COLLECTOR_REQUIRE_HARDWARE_API_KEY", defaults, fileValues)
         };
     }
 
@@ -285,23 +300,67 @@ class CollectorConfig
             throw new InvalidOperationException("HARDWARE_API_KEY is required when COLLECTOR_REQUIRE_HARDWARE_API_KEY=true.");
     }
 
-    static string GetEnv(string name, string fallback)
+    static Dictionary<string, string> LoadConfigFile()
     {
-        var value = Environment.GetEnvironmentVariable(name);
-        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        var configuredPath = Environment.GetEnvironmentVariable("COLLECTOR_CONFIG_PATH");
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+            candidates.Add(configuredPath.Trim());
+
+        candidates.Add(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "collector-config.json"));
+        candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "collector-config.json"));
+
+        foreach (var path in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(path)) continue;
+            var json = File.ReadAllText(path, Encoding.UTF8);
+            var serializer = new JavaScriptSerializer();
+            var raw = serializer.DeserializeObject(json) as Dictionary<string, object>;
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (raw == null) return values;
+
+            foreach (var pair in raw)
+            {
+                if (pair.Value == null) continue;
+                values[pair.Key] = Convert.ToString(pair.Value).Trim();
+            }
+            return values;
+        }
+
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
-    static int GetIntEnv(string name, int fallback)
+    static string GetSetting(
+        string name,
+        Dictionary<string, string> defaults,
+        Dictionary<string, string> fileValues)
     {
         var value = Environment.GetEnvironmentVariable(name);
+        if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
+
+        string fileValue;
+        if (fileValues.TryGetValue(name, out fileValue) && !string.IsNullOrWhiteSpace(fileValue))
+            return fileValue.Trim();
+
+        return defaults[name];
+    }
+
+    static int GetIntSetting(
+        string name,
+        Dictionary<string, string> defaults,
+        Dictionary<string, string> fileValues)
+    {
+        var value = GetSetting(name, defaults, fileValues);
         int parsed;
-        return int.TryParse(value, out parsed) ? parsed : fallback;
+        return int.TryParse(value, out parsed) ? parsed : int.Parse(defaults[name]);
     }
 
-    static bool GetBoolEnv(string name, bool fallback)
+    static bool GetBoolSetting(
+        string name,
+        Dictionary<string, string> defaults,
+        Dictionary<string, string> fileValues)
     {
-        var value = Environment.GetEnvironmentVariable(name);
-        if (string.IsNullOrWhiteSpace(value)) return fallback;
+        var value = GetSetting(name, defaults, fileValues);
         return value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
                value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
                value.Equals("yes", StringComparison.OrdinalIgnoreCase);

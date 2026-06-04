@@ -1,0 +1,10 @@
+{
+  "AI_X1_DEVICE_IP": "10.160.45.225",
+  "AI_X1_DEVICE_PORT": 4370,
+  "AI_X1_MACHINE_NUMBER": 1,
+  "AI_X1_COMM_PASSWORD": 0,
+  "SCHOOL_ID": "1",
+  "BACKEND_HARDWARE_SCAN_URL": "http://localhost:3000/api/v1/hardware/scan",
+  "AI_X1_POLL_MS": 3000,
+  "COLLECTOR_REQUIRE_HARDWARE_API_KEY": true
+}

@@ -2095,7 +2095,17 @@ class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
               borderRadius: BorderRadius.circular(16),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: Image.network(item.imageUrl, fit: BoxFit.cover),
+                child: Image.network(
+                  item.imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: AppTheme.brandSurface,
+                    child: const Icon(
+                      Icons.image_not_supported_rounded,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                ),
               ),
             ),
           const SizedBox(height: 16),
