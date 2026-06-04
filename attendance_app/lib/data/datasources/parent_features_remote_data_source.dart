@@ -23,22 +23,22 @@ class ParentFeaturesRemoteDataSource {
     final uri = Uri.tryParse(cleanedRaw);
     if (uri == null) return raw;
 
+    Uri fromCurrentApiOrigin(String path, [String? query]) {
+      return Uri.parse(base.origin).replace(
+        path: path,
+        query: query == null || query.isEmpty ? null : query,
+      );
+    }
+
     if (!uri.hasScheme) {
-      return base.resolve(cleanedRaw).toString();
+      return fromCurrentApiOrigin(uri.path, uri.query).toString();
     }
 
     final cleanedPath = uri.path.replaceFirst('/api/v1/uploads/', '/uploads/');
 
     if ((uri.host == '127.0.0.1' || uri.host == 'localhost') &&
         base.host != uri.host) {
-      return uri
-          .replace(
-            scheme: base.scheme,
-            host: base.host,
-            port: base.hasPort ? base.port : null,
-            path: cleanedPath,
-          )
-          .toString();
+      return fromCurrentApiOrigin(cleanedPath, uri.query).toString();
     }
 
     if (cleanedPath != uri.path) {

@@ -34,6 +34,11 @@ function initializeFirebaseAdmin() {
   }
 }
 
+function isFirebaseAdminReady() {
+  initializeFirebaseAdmin();
+  return admin.apps.length > 0;
+}
+
 /**
  * Firebase error codes that indicate a dead/invalid token and should be removed.
  * Covers both canonical and shorthand forms seen in different SDK versions.
@@ -78,6 +83,7 @@ async function sendPushNotification(payload) {
 
 module.exports = {
   initializeFirebaseAdmin,
+  isFirebaseAdminReady,
   isUnregisteredTokenError,
   sendPushNotification,
 };

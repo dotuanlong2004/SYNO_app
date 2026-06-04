@@ -15,6 +15,32 @@ const {
 const router = express.Router();
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
+function getRequestOrigin(req) {
+  const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const proto = forwardedProto || req.protocol || 'http';
+  return `${proto}://${req.get('host')}`;
+}
+
+function normalizeBackendAssetUrl(req, value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  let parsed;
+  const cleanedRaw = raw.replace('/api/v1/uploads/', '/uploads/');
+  try {
+    parsed = new URL(cleanedRaw, getRequestOrigin(req));
+  } catch (_) {
+    return raw;
+  }
+
+  const path = parsed.pathname.replace('/api/v1/uploads/', '/uploads/');
+  if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || path !== parsed.pathname) {
+    return `${getRequestOrigin(req)}${path}${parsed.search}`;
+  }
+
+  return parsed.toString();
+}
+
 function toVietnamParts(input) {
   const date = input instanceof Date ? input : new Date(input);
   const formatter = new Intl.DateTimeFormat('vi-VN', {
@@ -226,7 +252,14 @@ router.get('/events', mobileAuth, async (req, res) => {
       .order('published_at', { ascending: false })
       .limit(100);
     if (error) throw error;
-    return res.status(200).json({ ok: true, count: data.length, data });
+    return res.status(200).json({
+      ok: true,
+      count: data.length,
+      data: (data || []).map((event) => ({
+        ...event,
+        image_url: normalizeBackendAssetUrl(req, event.image_url),
+      })),
+    });
   } catch (error) {
     console.error('Failed to fetch events', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });

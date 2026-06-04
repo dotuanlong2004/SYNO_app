@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
 const { getSupabase } = require('../config/supabase');
-const { sendPushNotification } = require('../config/firebaseAdmin');
+const { isFirebaseAdminReady, sendPushNotification } = require('../config/firebaseAdmin');
 const { mobileAuth } = require('../middleware/mobileAuth');
 const {
   buildAnnouncementPayload,
@@ -636,6 +636,8 @@ router.post('/announcements', async (req, res) => {
     return res.status(201).json({ ok: true, data });
   }
 
+  const firebaseReady = isFirebaseAdminReady();
+
   const { data: parentProfiles, error: tokenError } = await supabase
     .from('user_profiles')
     .select('id, email, fcm_token')
@@ -660,11 +662,11 @@ router.post('/announcements', async (req, res) => {
   const pushResults = await Promise.all(
     (parentProfiles || []).map(async (profile) => {
       try {
-        await sendPushNotification(buildAnnouncementPushPayload({
+        const result = await sendPushNotification(buildAnnouncementPushPayload({
           token: profile.fcm_token,
           announcement: data,
         }));
-        return { ok: true };
+        return { ok: true, mocked: Boolean(result?.mocked) };
       } catch (pushError) {
         console.warn('[admin-announcements] FCM send failed:', pushError.message);
         return { ok: false };
@@ -675,7 +677,14 @@ router.post('/announcements', async (req, res) => {
   return res.status(201).json({
     ok: true,
     data,
-    notification: summarizePushResults(pushResults),
+    notification: {
+      ...summarizePushResults(pushResults),
+      mocked: pushResults.some((result) => result.mocked),
+      push_ready: firebaseReady,
+      message: firebaseReady
+        ? undefined
+        : 'Firebase Admin chưa được cấu hình, backend chỉ ghi log nên điện thoại chưa nhận push thật.',
+    },
   });
 });
 
