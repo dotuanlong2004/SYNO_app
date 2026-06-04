@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/notifications/local_notification_service.dart';
 import '../../core/network/api_config.dart';
 import '../../core/network/dio_client.dart';
 import '../../data/auth/auth_api.dart';
@@ -65,7 +67,12 @@ final fcmServiceProvider = Provider<FcmService>((ref) {
 });
 
 class AuthController extends Notifier<AuthState> {
+  static const Duration _attendancePollInterval = Duration(seconds: 5);
+
   bool _initialized = false;
+  Timer? _attendancePollTimer;
+  String? _lastAttendanceSignature;
+  bool _attendancePollPrimed = false;
 
   @override
   AuthState build() {
@@ -73,6 +80,10 @@ class AuthController extends Notifier<AuthState> {
       _initialized = true;
       Future<void>.microtask(_initialize);
     }
+    ref.onDispose(() {
+      _attendancePollTimer?.cancel();
+      _attendancePollTimer = null;
+    });
     return const AuthState.unknown();
   }
 
@@ -191,6 +202,8 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    _stopAttendancePolling();
+
     final refresh = await _readRefreshToken();
     if (refresh != null && refresh.isNotEmpty) {
       try {
@@ -250,7 +263,94 @@ class AuthController extends Notifier<AuthState> {
   void _initializeFcm() {
     Future<void>.microtask(() async {
       await ref.read(fcmServiceProvider).initialize();
+      _startAttendancePolling();
     });
+  }
+
+  void _startAttendancePolling() {
+    if (_attendancePollTimer != null) return;
+
+    Future<void>.microtask(_pollAttendanceBaseline);
+    _attendancePollTimer = Timer.periodic(_attendancePollInterval, (_) {
+      _pollAttendanceForUpdates();
+    });
+  }
+
+  void _stopAttendancePolling() {
+    _attendancePollTimer?.cancel();
+    _attendancePollTimer = null;
+    _lastAttendanceSignature = null;
+    _attendancePollPrimed = false;
+  }
+
+  Future<void> _pollAttendanceBaseline() async {
+    if (!_isAuthenticated) return;
+    try {
+      final records = await ref
+          .read(attendanceRepositoryProvider)
+          .fetchAttendanceHistory();
+      _lastAttendanceSignature = _latestAttendanceSignature(records);
+      _attendancePollPrimed = true;
+      ref.invalidate(attendanceHistoryProvider);
+    } catch (_) {
+      // Polling is a fallback for local/dev push; never block the app on it.
+    }
+  }
+
+  Future<void> _pollAttendanceForUpdates() async {
+    if (!_isAuthenticated) return;
+
+    try {
+      final records = await ref
+          .read(attendanceRepositoryProvider)
+          .fetchAttendanceHistory();
+      final latestSignature = _latestAttendanceSignature(records);
+      if (latestSignature == null) {
+        _lastAttendanceSignature = null;
+        _attendancePollPrimed = true;
+        return;
+      }
+
+      if (!_attendancePollPrimed) {
+        _lastAttendanceSignature = latestSignature;
+        _attendancePollPrimed = true;
+        ref.invalidate(attendanceHistoryProvider);
+        return;
+      }
+
+      if (latestSignature == _lastAttendanceSignature) return;
+
+      _lastAttendanceSignature = latestSignature;
+      ref.invalidate(attendanceHistoryProvider);
+      await _showAttendanceUpdateNotification(records.first);
+    } catch (_) {
+      // Keep the last known state and retry on the next tick.
+    }
+  }
+
+  bool get _isAuthenticated => state.isAuthenticated;
+
+  String? _latestAttendanceSignature(List<AttendanceRecord> records) {
+    if (records.isEmpty) return null;
+    final latest = records.first;
+    return '${latest.studentId}|${latest.timestamp.toIso8601String()}|${latest.logType.name}';
+  }
+
+  Future<void> _showAttendanceUpdateNotification(AttendanceRecord record) {
+    final action = record.logType == AttendanceLogType.checkOut
+        ? 'điểm danh ra'
+        : 'điểm danh vào';
+    final time = _formatVietnameseTime(record.timestamp);
+    return LocalNotificationService.showPlainNotification(
+      title: 'Thông báo điểm danh',
+      body: '${record.studentId} đã $action lúc $time.',
+    );
+  }
+
+  String _formatVietnameseTime(DateTime value) {
+    String twoDigits(int number) => number.toString().padLeft(2, '0');
+    return '${twoDigits(value.hour)}:${twoDigits(value.minute)} '
+        '${twoDigits(value.day)}/${twoDigits(value.month)}/${value.year}';
   }
 
   Future<void> _clearTokens() async {

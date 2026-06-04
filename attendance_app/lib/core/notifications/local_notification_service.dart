@@ -99,6 +99,35 @@ class LocalNotificationService {
     );
   }
 
+  static Future<void> showPlainNotification({
+    required String title,
+    required String body,
+  }) async {
+    await initialize();
+
+    const androidDetails = AndroidNotificationDetails(
+      'syno_channel',
+      'Thông báo SYNO',
+      channelDescription: 'Thông báo thời gian thực từ SYNO',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const iosDetails = DarwinNotificationDetails();
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      windows: WindowsNotificationDetails(),
+    );
+
+    await _plugin.show(
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: title,
+      body: body,
+      notificationDetails: details,
+    );
+  }
+
   static Future<void> showAttendanceNotification(RemoteMessage message) {
     return showRemoteNotification(message);
   }
