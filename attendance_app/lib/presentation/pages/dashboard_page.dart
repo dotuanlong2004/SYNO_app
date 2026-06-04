@@ -2693,6 +2693,50 @@ class _GradesTabState extends ConsumerState<_GradesTab> {
         .fold<double>(0, (sum, grade) => sum + grade.subjectAverage);
   }
 
+  List<double> _yearlySubjectAverages(List<GradeRecord> grades) {
+    final bySubject = <String, List<GradeRecord>>{};
+    for (final grade in grades) {
+      final key = grade.subjectName.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      bySubject.putIfAbsent(key, () => <GradeRecord>[]).add(grade);
+    }
+
+    return bySubject.values.map((rows) {
+      final semester1Rows = rows.where((grade) => _isSemester(grade, '1'));
+      final semester2Rows = rows.where((grade) => _isSemester(grade, '2'));
+      final semester1Average = semester1Rows.isEmpty
+          ? null
+          : semester1Rows.fold<double>(
+                  0,
+                  (sum, grade) => sum + grade.subjectAverage,
+                ) /
+                semester1Rows.length;
+      final semester2Average = semester2Rows.isEmpty
+          ? null
+          : semester2Rows.fold<double>(
+                  0,
+                  (sum, grade) => sum + grade.subjectAverage,
+                ) /
+                semester2Rows.length;
+
+      if (semester1Average != null && semester2Average != null) {
+        return (semester1Average + semester2Average * 2) / 3;
+      }
+      return semester1Average ?? semester2Average ?? 0;
+    }).where((score) => score > 0).toList();
+  }
+
+  double? _yearlyAverage(List<GradeRecord> grades) {
+    final scores = _yearlySubjectAverages(grades);
+    if (scores.isEmpty) return null;
+    return scores.fold<double>(0, (sum, score) => sum + score) / scores.length;
+  }
+
+  double _yearlyTotal(List<GradeRecord> grades) {
+    return _yearlySubjectAverages(grades)
+        .fold<double>(0, (sum, score) => sum + score);
+  }
+
   Widget _summaryCard({
     required String title,
     required double? average,
@@ -2767,10 +2811,8 @@ class _GradesTabState extends ConsumerState<_GradesTab> {
         final semester2Average = _termAverage(grades, '2');
         final semester1Total = _termTotal(grades, '1');
         final semester2Total = _termTotal(grades, '2');
-        final yearlyAverage = semester1Average != null && semester2Average != null
-            ? (semester1Average + semester2Average * 2) / 3
-            : semester1Average ?? semester2Average;
-        final yearlyTotal = semester1Total + semester2Total;
+        final yearlyAverage = _yearlyAverage(grades);
+        final yearlyTotal = _yearlyTotal(grades);
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -2799,26 +2841,33 @@ class _GradesTabState extends ConsumerState<_GradesTab> {
                 ),
               ),
               const SizedBox(height: 12),
-              _summaryCard(
-                title: 'Tổng điểm học kỳ 1',
-                average: semester1Average,
-                total: semester1Total,
-                icon: Icons.looks_one_rounded,
-              ),
-              const SizedBox(height: 10),
-              _summaryCard(
-                title: 'Tổng điểm học kỳ 2',
-                average: semester2Average,
-                total: semester2Total,
-                icon: Icons.looks_two_rounded,
-              ),
-              const SizedBox(height: 10),
-              _summaryCard(
-                title: 'Tổng điểm cả năm',
-                average: yearlyAverage,
-                total: yearlyTotal,
-                icon: Icons.emoji_events_rounded,
-              ),
+              if (_semesterFilter != 'Học kỳ 2') ...[
+                _summaryCard(
+                  title: 'Tổng điểm học kỳ 1',
+                  average: semester1Average,
+                  total: semester1Total,
+                  icon: Icons.looks_one_rounded,
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (_semesterFilter != 'Học kỳ 1') ...[
+                _summaryCard(
+                  title: 'Tổng điểm học kỳ 2',
+                  average: semester2Average,
+                  total: semester2Total,
+                  icon: Icons.looks_two_rounded,
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (_semesterFilter == 'Cả năm') ...[
+                _summaryCard(
+                  title: 'Tổng điểm cả năm',
+                  average: yearlyAverage,
+                  total: yearlyTotal,
+                  icon: Icons.emoji_events_rounded,
+                ),
+                const SizedBox(height: 10),
+              ],
               const SizedBox(height: 16),
               // Header bảng
               Container(

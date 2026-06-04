@@ -357,16 +357,32 @@ router.post('/students', async (req, res) => {
 // PUT /admin-web/students/:id
 router.put('/students/:id', async (req, res) => {
   const supabase = getSupabase();
+  const student_code = String(req.body.student_code || '').trim();
   const full_name = String(req.body.full_name || '').trim();
   const class_name = String(req.body.class_name || '').trim();
 
-  if (!full_name || !class_name) {
-    return res.status(400).json({ ok: false, error: 'Tên học sinh và lớp là bắt buộc' });
+  if (!student_code || !full_name || !class_name) {
+    return res.status(400).json({ ok: false, error: 'Mã học sinh, tên học sinh và lớp là bắt buộc' });
+  }
+
+  const { data: duplicate, error: duplicateError } = await supabase
+    .from('students')
+    .select('id')
+    .eq('student_code', student_code)
+    .eq('school_id', req.schoolId)
+    .neq('id', req.params.id)
+    .maybeSingle();
+
+  if (duplicateError) {
+    return res.status(500).json({ ok: false, error: duplicateError.message });
+  }
+  if (duplicate) {
+    return res.status(409).json({ ok: false, error: `Mã học sinh ${student_code} đã tồn tại trong trường hiện tại` });
   }
 
   const { data, error } = await supabase
     .from('students')
-    .update({ full_name, class_name })
+    .update({ student_code, full_name, class_name, updated_at: new Date().toISOString() })
     .eq('id', req.params.id)
     .eq('school_id', req.schoolId)
     .select()
@@ -1340,23 +1356,187 @@ router.get('/parents', async (req, res) => {
     
     console.log('[parents] usersMap:', Object.keys(usersMap));
 
-    // Build parent list from students
-    const parents = studentsData.map(s => {
-      const user = usersMap[String(s.parent_id)];
+    const groupedStudents = studentsData.reduce((acc, student) => {
+      const key = String(student.parent_id);
+      acc[key] = acc[key] || [];
+      acc[key].push(student);
+      return acc;
+    }, {});
+
+    const { data: parentProfiles } = await supabase
+      .from('user_profiles')
+      .select('id, full_name, phone, is_active')
+      .in('id', parentIds);
+    const profilesMap = Object.fromEntries((parentProfiles || []).map((profile) => [String(profile.id), profile]));
+
+    // Build parent list from unique parent accounts
+    const parents = parentIds.map((parentId) => {
+      const key = String(parentId);
+      const user = usersMap[key];
+      const profile = profilesMap[key] || {};
+      const linkedStudents = groupedStudents[key] || [];
+      const firstStudent = linkedStudents[0] || {};
       return {
-        id: s.parent_id,
+        id: parentId,
         email: user?.email || 'N/A',
-        full_name: user?.user_metadata?.full_name || '',
-        phone: user?.user_metadata?.phone || '',
-        student_code: s.student_code,
-        student_name: s.full_name,
-        school_id: req.schoolId
+        full_name: profile.full_name || user?.user_metadata?.full_name || '',
+        phone: profile.phone || user?.user_metadata?.phone || '',
+        is_active: profile.is_active !== false,
+        linked_students_count: linkedStudents.length,
+        student_code: firstStudent.student_code || '',
+        student_name: firstStudent.full_name || '',
+        linked_students: linkedStudents.map((student) => ({
+          id: student.id,
+          student_code: student.student_code,
+          full_name: student.full_name,
+        })),
+        last_sign_in_at: user?.last_sign_in_at || null,
+        created_at: user?.created_at || null,
+        school_id: req.schoolId,
       };
     });
 
     return res.json({ ok: true, data: parents });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+async function loadParentInSchool({ supabase, schoolId, parentId }) {
+  const { data: linkedStudents, error: studentsError } = await supabase
+    .from('students')
+    .select('id, student_code, full_name, class_name, parent_id')
+    .eq('school_id', schoolId)
+    .eq('parent_id', parentId);
+
+  if (studentsError) throw studentsError;
+  if (!linkedStudents || linkedStudents.length === 0) return null;
+
+  const { data: userData, error: userError } = await supabase.auth.admin.getUserById(String(parentId));
+  if (userError) throw userError;
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('id, full_name, phone, is_active')
+    .eq('id', parentId)
+    .maybeSingle();
+
+  return {
+    id: parentId,
+    email: userData?.user?.email || '',
+    full_name: profile?.full_name || userData?.user?.user_metadata?.full_name || '',
+    phone: profile?.phone || userData?.user?.user_metadata?.phone || '',
+    is_active: profile?.is_active !== false,
+    last_sign_in_at: userData?.user?.last_sign_in_at || null,
+    linked_students: linkedStudents,
+  };
+}
+
+// GET /admin-web/parents/:id
+router.get('/parents/:id', async (req, res) => {
+  const supabase = getSupabase();
+  try {
+    const parent = await loadParentInSchool({
+      supabase,
+      schoolId: req.schoolId,
+      parentId: req.params.id,
+    });
+    if (!parent) {
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy phụ huynh trong trường hiện tại' });
+    }
+    return res.json({ ok: true, data: parent });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// POST /admin-web/parents/:id/reset-password
+router.post('/parents/:id/reset-password', async (req, res) => {
+  const supabase = getSupabase();
+  try {
+    const parent = await loadParentInSchool({
+      supabase,
+      schoolId: req.schoolId,
+      parentId: req.params.id,
+    });
+    if (!parent) {
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy phụ huynh trong trường hiện tại' });
+    }
+
+    const temporaryPassword = `Syno@${crypto.randomInt(100000, 999999)}`;
+    const { error } = await supabase.auth.admin.updateUserById(String(req.params.id), {
+      password: temporaryPassword,
+      user_metadata: {
+        full_name: parent.full_name,
+        phone: parent.phone || '',
+        role: 'parent',
+        school_id: req.schoolId,
+        must_change_password: true,
+      },
+    });
+
+    if (error) return res.status(500).json({ ok: false, error: error.message });
+
+    return res.json({
+      ok: true,
+      data: {
+        parent_id: req.params.id,
+        temporary_password: temporaryPassword,
+        note: 'Tài khoản cần đổi mật khẩu trong lần đăng nhập đầu tiên.',
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// POST /admin-web/parents/:id/toggle-active
+router.post('/parents/:id/toggle-active', async (req, res) => {
+  const supabase = getSupabase();
+  try {
+    const parent = await loadParentInSchool({
+      supabase,
+      schoolId: req.schoolId,
+      parentId: req.params.id,
+    });
+    if (!parent) {
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy phụ huynh trong trường hiện tại' });
+    }
+
+    const nextActive = req.body?.is_active == null
+      ? !parent.is_active
+      : Boolean(req.body.is_active);
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .update({
+        is_active: nextActive,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', req.params.id)
+      .eq('school_id', req.schoolId)
+      .eq('role', 'parent');
+
+    if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
+
+    await supabase.auth.admin.updateUserById(String(req.params.id), {
+      user_metadata: {
+        full_name: parent.full_name,
+        phone: parent.phone || '',
+        role: 'parent',
+        school_id: req.schoolId,
+        is_active: nextActive,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        parent_id: req.params.id,
+        is_active: nextActive,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
   }
 });
 

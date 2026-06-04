@@ -20,7 +20,7 @@ const ADMIN_WEB_API = `${API_BASE}/admin-web`;
 const AUTH_TOKEN_KEY = 'admin_web_token';
 const AUTH_REFRESH_TOKEN_KEY = 'admin_web_refresh_token';
 const AUTH_USER_KEY  = 'admin_web_user';
-const API_CONNECTION_ERROR = 'Không thể kết nối đến backend SYNO. Hãy kiểm tra API server đang chạy ở http://127.0.0.1:3000.';
+const API_CONNECTION_ERROR = 'Không thể kết nối đến máy chủ xử lý dữ liệu SYNO. Hãy kiểm tra dịch vụ đang chạy ở http://127.0.0.1:3000.';
 
 // ─── Màn hình đăng nhập ─────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
@@ -174,6 +174,29 @@ function EmptyState({ message }) {
   return (
     <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
       {message}
+    </div>
+  );
+}
+
+function StatusBadge({ children, className = 'bg-slate-100 text-slate-700' }) {
+  return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${className}`}>{children}</span>;
+}
+
+function senderRoleLabel(value) {
+  const role = String(value || '').toLowerCase();
+  if (role === 'parent') return 'Phụ huynh';
+  if (role === 'admin' || role === 'teacher' || role === 'staff') return 'Nhà trường';
+  return 'Không rõ';
+}
+
+function SectionHeader({ title, description, actions = null }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 className="text-lg font-bold text-slate-950">{title}</h2>
+        {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+      </div>
+      {actions}
     </div>
   );
 }
@@ -338,7 +361,7 @@ function sortClassName(a, b) {
 
 // ─── AppShell: Toàn bộ Admin UI (chỉ render khi đã đăng nhập) ──────────────
 function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
-  const [tab, setTab] = useState('students');
+  const [tab, setTab] = useState('overview');
   const schoolId = String(authUser.school_id || DEFAULT_SCHOOL_ID);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -355,6 +378,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     parent_name: '',
     parent_email: '',
     parent_phone: '',
+    relationship: 'mother',
     password: ''
   });
   const [timetables, setTimetables] = useState([]);
@@ -376,6 +400,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [feeForm, setFeeForm] = useState({
     student_code: '',
     class_id: '',
+    fee_name: '',
+    apply_scope: 'student',
     subject_fees_text: '',
     other_fees_text: '',
     total_amount: '',
@@ -390,6 +416,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     title: '',
     content: '',
     priority: 'normal',
+    target_type: 'school',
     is_general: true,
     send_notification: false,
   });
@@ -399,6 +426,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     content: '',
     event_date: '',
     image_url: '',
+    target_type: 'school',
+    visible_on_parent_app: true,
   });
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventImageLoading, setEventImageLoading] = useState(false);
@@ -407,8 +436,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [gradeForm, setGradeForm] = useState({
     student_code: '',
     subject_name: '',
-    midterm_score: '0',
-    final_score: '0',
+    semester: 'Học kỳ 1',
+    midterm_score: '',
+    final_score: '',
+    comment: '',
   });
   const [chatMessages, setChatMessages] = useState([]);
   const [chatForm, setChatForm] = useState({
@@ -419,6 +450,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [attendanceFilters, setAttendanceFilters] = useState({
     student_code: '',
+    class_name: '',
+    log_type: '',
+    status_detail: '',
     date_from: '',
     date_to: '',
   });
@@ -491,9 +525,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       requestJson(`${ADMIN_WEB_API}/events`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/chat/messages`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/parents`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
     ])
-      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, eventsJson, gradesJson, chatJson, attendanceJson]) => {
+      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, eventsJson, gradesJson, chatJson, parentsJson, attendanceJson]) => {
         setStudents(studentsJson.data || []);
         setTimetables(timetablesJson.data || []);
         setFees(feesJson.data || []);
@@ -501,6 +536,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         setEvents(eventsJson.data || []);
         setGrades(gradesJson.data || []);
         setChatMessages(chatJson.data || []);
+        setParents(parentsJson.data || []);
         setAttendanceLogs(attendanceJson.data || []);
         loadSystemHealth().catch(() => {});
       })
@@ -558,7 +594,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
     if (!contentType.includes('application/json')) {
       throw new Error(
-        `API ${url} trả về không đúng định dạng JSON (HTTP ${response.status}). Hãy kiểm tra backend có đang chạy.`,
+        `Kết nối dữ liệu ${url} trả về không đúng định dạng JSON (HTTP ${response.status}). Hãy kiểm tra máy chủ xử lý dữ liệu có đang chạy.`,
       );
     }
 
@@ -595,7 +631,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       const json = await requestJson(HEALTH_API);
       setSystemHealth(json);
     } catch (error) {
-      setSystemHealth({ ok: false, error: error.message || 'Không thể tải trạng thái backend' });
+      setSystemHealth({ ok: false, error: error.message || 'Không thể tải trạng thái máy chủ xử lý dữ liệu' });
     }
   }
 
@@ -640,6 +676,63 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
       });
       setParents(json.data || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function showParentDetail(parent) {
+    setMessage('');
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/parents/${parent.id}`, {
+        headers: adminHeaders,
+      });
+      const detail = json.data || {};
+      const studentsText = (detail.linked_students || [])
+        .map((student) => `${student.student_code} - ${student.full_name} - ${student.class_name || 'Chưa có lớp'}`)
+        .join('; ');
+      setMessage(
+        `Phụ huynh: ${detail.full_name || detail.email || parent.email}. ` +
+        `Email: ${detail.email || '-'}. ` +
+        `SĐT: ${detail.phone || '-'}. ` +
+        `Học sinh liên kết: ${studentsText || 'Chưa có học sinh'}.`,
+      );
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function resetParentPassword(parent) {
+    if (!window.confirm(`Đặt lại mật khẩu cho phụ huynh ${parent.full_name || parent.email}?`)) return;
+    setMessage('');
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/parents/${parent.id}/reset-password`, {
+        method: 'POST',
+        headers: adminHeaders,
+      });
+      setMessage(
+        `Đã đặt lại mật khẩu. Mật khẩu tạm: ${json.data?.temporary_password}. ` +
+        `${json.data?.note || 'Tài khoản cần đổi mật khẩu trong lần đăng nhập đầu tiên.'}`,
+      );
+      await loadParents();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function toggleParentActive(parent) {
+    const nextActive = parent.is_active === false;
+    const action = nextActive ? 'mở khóa' : 'khóa';
+    if (!window.confirm(`Xác nhận ${action} tài khoản phụ huynh ${parent.full_name || parent.email}?`)) return;
+    setMessage('');
+    try {
+      await requestJson(`${ADMIN_WEB_API}/parents/${parent.id}/toggle-active`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({ is_active: nextActive }),
+      });
+      setMessage(nextActive ? 'Đã mở khóa tài khoản phụ huynh.' : 'Đã khóa tài khoản phụ huynh.');
+      await loadParents();
     } catch (error) {
       setMessage(error.message);
     }
@@ -696,6 +789,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     try {
       const params = new URLSearchParams();
       if (attendanceFilters.student_code) params.set('student_code', attendanceFilters.student_code);
+      if (attendanceFilters.class_name) params.set('class_name', attendanceFilters.class_name);
+      if (attendanceFilters.log_type) params.set('log_type', attendanceFilters.log_type);
+      if (attendanceFilters.status_detail) params.set('status_detail', attendanceFilters.status_detail);
       if (attendanceFilters.date_from) params.set('date_from', attendanceFilters.date_from);
       if (attendanceFilters.date_to) params.set('date_to', attendanceFilters.date_to);
       const suffix = params.toString() ? `?${params.toString()}` : '';
@@ -930,16 +1026,29 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     );
   }, [chatMessages, chatSearch]);
 
-  const adminStats = useMemo(() => {
-    const paidFees = fees.filter((item) => String(item.payment_status || '').toLowerCase() === 'paid').length;
-    const latestAttendance = attendanceLogs[0]?.scanned_at ? formatDateTime(attendanceLogs[0].scanned_at) : 'Chưa có';
+  const overviewStats = useMemo(() => {
+    const today = new Date().toLocaleDateString('vi-VN');
+    const attendanceToday = attendanceLogs.filter((item) =>
+      item.scanned_at ? new Date(item.scanned_at).toLocaleDateString('vi-VN') === today : false
+    ).length;
+    const linkedParents = students.filter((student) => student.parent_name || student.parent_id).length;
+    const unpaidFees = fees.filter((item) => String(item.payment_status || '').toLowerCase() !== 'paid').length;
+    const needsReview = [
+      students.length === 0,
+      parents.length === 0,
+      timetables.length === 0,
+      fees.length === 0,
+      grades.length === 0,
+    ].filter(Boolean).length;
     return [
-      ['Học sinh', students.length],
-      ['TKB', timetables.length],
-      ['Khoản phí đã thu', `${paidFees}/${fees.length}`],
-      ['Điểm danh mới nhất', latestAttendance],
+      ['Tổng số học sinh', students.length, 'students'],
+      ['Phụ huynh đã liên kết', linkedParents, 'parents'],
+      ['Điểm danh hôm nay', attendanceToday, 'attendance'],
+      ['Thông báo đã gửi', announcements.length, 'announcements'],
+      ['Khoản phí chưa thanh toán', unpaidFees, 'fees'],
+      ['Dữ liệu cần kiểm tra', needsReview, 'system'],
     ];
-  }, [students.length, timetables.length, fees, attendanceLogs]);
+  }, [students, parents.length, timetables.length, fees, grades.length, attendanceLogs, announcements.length]);
 
   const syncStatus = useMemo(() => {
     const latestAttendanceAt = attendanceLogs[0]?.scanned_at ? new Date(attendanceLogs[0].scanned_at) : null;
@@ -1050,11 +1159,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       const json = await requestJson(`${ADMIN_WEB_API}/timetables/bulk`, {
         method: 'POST', headers: adminHeaders, body: JSON.stringify({ rows }),
       });
-      showTtToast('success', `✅ Import thành công ${json.inserted} tiết học.`);
+      showTtToast('success', `Nhập thành công ${json.inserted} tiết học.`);
       setTtImportPreview([]);
       await loadTimetables();
     } catch (err) {
-      showTtToast('error', `Import thất bại: ${err.message}`);
+      showTtToast('error', `Nhập thất bại: ${err.message}`);
     } finally {
       setTtImportLoading(false);
     }
@@ -1090,11 +1199,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       const json = await requestJson(`${ADMIN_WEB_API}/fees/bulk`, {
         method: 'POST', headers: adminHeaders, body: JSON.stringify({ rows }),
       });
-      showFeeToast('success', `✅ Import thành công ${json.inserted} thông báo học phí.`);
+      showFeeToast('success', `Nhập thành công ${json.inserted} thông báo học phí.`);
       setFeeImportPreview([]);
       await loadFees();
     } catch (err) {
-      showFeeToast('error', `Import thất bại: ${err.message}`);
+      showFeeToast('error', `Nhập thất bại: ${err.message}`);
     } finally {
       setFeeImportLoading(false);
     }
@@ -1132,11 +1241,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       const json = await requestJson(`${ADMIN_WEB_API}/grades/bulk`, {
         method: 'POST', headers: adminHeaders, body: JSON.stringify({ rows }),
       });
-      showGradeToast('success', `✅ Import thành công ${json.inserted} bản ghi điểm.`);
+      showGradeToast('success', `Nhập thành công ${json.inserted} bản ghi điểm.`);
       setGradeImportPreview([]);
       await loadGrades();
     } catch (err) {
-      showGradeToast('error', `Import thất bại: ${err.message}`);
+      showGradeToast('error', `Nhập thất bại: ${err.message}`);
     } finally {
       setGradeImportLoading(false);
     }
@@ -1212,7 +1321,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         body: JSON.stringify({ rows }),
       });
 
-      let msg = `✅ Import thành công ${json.inserted} học sinh.`;
+      let msg = `Nhập thành công ${json.inserted} học sinh.`;
       if (json.invalid && json.invalid.length > 0) {
         msg += ` ⚠️ ${json.invalid.length} dòng bị bỏ qua (thiếu mã/tên).`;
       }
@@ -1220,7 +1329,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       setImportPreview([]);
       await loadStudents();
     } catch (error) {
-      showImportToast('error', `Import thất bại: ${error.message}`);
+      showImportToast('error', `Nhập thất bại: ${error.message}`);
     } finally {
       setImportLoading(false);
     }
@@ -1229,7 +1338,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
   async function submitApiImport(moduleName, reloadFn) {
     const form = apiImportForms[moduleName] || { url: '', api_key: '' };
     if (!form.url.trim()) {
-      setMessage('Vui lòng nhập URL API nguồn.');
+      setMessage('Vui lòng nhập đường dẫn kết nối dữ liệu nguồn.');
       return;
     }
     setApiImportLoading(moduleName);
@@ -1240,7 +1349,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
         body: JSON.stringify(form),
       });
-      setMessage(`✅ Import qua API thành công ${json.imported || 0} bản ghi.`);
+      setMessage(`✅ Nhập qua kết nối dữ liệu thành công ${json.imported || 0} bản ghi.`);
       await reloadFn();
     } catch (error) {
       setMessage(error.message);
@@ -1258,7 +1367,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         <div className="grid gap-2 md:grid-cols-[1fr_260px_auto]">
           <input
             className="rounded-lg border border-sky-200 px-3 py-2 text-sm"
-            placeholder="URL API dữ liệu của trường"
+            placeholder="Đường dẫn kết nối dữ liệu của trường"
             value={form.url}
             onChange={(event) =>
               setApiImportForms((prev) => ({
@@ -1269,7 +1378,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           />
           <input
             className="rounded-lg border border-sky-200 px-3 py-2 text-sm"
-            placeholder="API key"
+            placeholder="Mã kết nối"
             value={form.api_key}
             onChange={(event) =>
               setApiImportForms((prev) => ({
@@ -1284,7 +1393,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             disabled={loading}
             className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
           >
-            {loading ? 'Đang nhập...' : 'Nhập qua API'}
+            {loading ? 'Đang nhập...' : 'Nhập qua kết nối dữ liệu'}
           </button>
         </div>
       </div>
@@ -1483,7 +1592,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         body: JSON.stringify(body),
       });
       setProvisionResult(json);
-      setParentForm({ parent_name: '', parent_email: '', parent_phone: '', password: '' });
+      setParentForm({ parent_name: '', parent_email: '', parent_phone: '', relationship: 'mother', password: '' });
       // Don't reload students to keep the result visible
       // await loadStudents();
     } catch (error) {
@@ -1503,7 +1612,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
         body: JSON.stringify({ student_code: studentCode }),
       });
-      setMessage(`✅ Giả lập quẹt thẻ thành công: ${json.student_code} (${json.student_name}) -> ${json.log_type} lúc ${new Date(json.scanned_at).toLocaleTimeString('vi-VN')}`);
+      setMessage(`Đã tạo dữ liệu kiểm thử điểm danh: ${json.student_code} (${json.student_name}) - ${json.log_type === 'check_out' ? 'Ra' : 'Vào'} lúc ${new Date(json.scanned_at).toLocaleTimeString('vi-VN')}`);
     } catch (error) {
       setMessage(error.message);
     }
@@ -1673,6 +1782,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
     try {
       const subjectFees = parseFeeLines(feeForm.subject_fees_text);
+      if (feeForm.fee_name?.trim() && Object.keys(subjectFees).length === 0) {
+        subjectFees[feeForm.fee_name.trim()] = Number(feeForm.total_amount || 0);
+      }
       const otherFees = parseFeeLines(feeForm.other_fees_text);
       const computedTotal = [...Object.values(subjectFees), ...Object.values(otherFees)]
         .reduce((sum, amount) => sum + Number(amount || 0), 0);
@@ -1690,6 +1802,18 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           paid_at: feeForm.paid_at || null,
         }),
       });
+      setFeeForm({
+        student_code: '',
+        class_id: '',
+        fee_name: '',
+        apply_scope: 'student',
+        subject_fees_text: '',
+        other_fees_text: '',
+        total_amount: '',
+        payment_status: 'unpaid',
+        payment_method: '',
+        paid_at: '',
+      });
       await loadFees();
     } catch (error) {
       setMessage(error.message);
@@ -1706,6 +1830,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
     try {
       const subjectFees = parseFeeLines(feeForm.subject_fees_text);
+      if (feeForm.fee_name?.trim() && Object.keys(subjectFees).length === 0) {
+        subjectFees[feeForm.fee_name.trim()] = Number(feeForm.total_amount || 0);
+      }
       const otherFees = parseFeeLines(feeForm.other_fees_text);
       const computedTotal = [...Object.values(subjectFees), ...Object.values(otherFees)]
         .reduce((sum, amount) => sum + Number(amount || 0), 0);
@@ -1727,6 +1854,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       setFeeForm({
         student_code: '',
         class_id: '',
+        fee_name: '',
+        apply_scope: 'student',
         subject_fees_text: '',
         other_fees_text: '',
         total_amount: '',
@@ -1747,6 +1876,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     setFeeForm({
       student_code: item.student_code || '',
       class_id: item.class_id || '',
+      fee_name: '',
+      apply_scope: 'student',
       subject_fees_text: feeMapToLines(item.subject_fees || {}),
       other_fees_text: feeMapToLines(item.other_fees || {}),
       total_amount: String(item.total_amount ?? ''),
@@ -1761,6 +1892,8 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     setFeeForm({
       student_code: '',
       class_id: '',
+      fee_name: '',
+      apply_scope: 'student',
       subject_fees_text: '',
       other_fees_text: '',
       total_amount: '',
@@ -1793,7 +1926,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         headers: adminHeaders,
         body: JSON.stringify(announcementForm),
       });
-      setAnnouncementForm({ title: '', content: '', priority: 'normal', is_general: true, send_notification: false });
+      setAnnouncementForm({ title: '', content: '', priority: 'normal', target_type: 'school', is_general: true, send_notification: false });
       await loadAnnouncements();
     } catch (error) {
       setMessage(error.message);
@@ -1823,7 +1956,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         body: JSON.stringify(eventForm),
       });
       setEditingEventId(null);
-      setEventForm({ title: '', content: '', event_date: '', image_url: '' });
+      setEventForm({ title: '', content: '', event_date: '', image_url: '', target_type: 'school', visible_on_parent_app: true });
       await loadEvents();
     } catch (error) {
       setMessage(error.message);
@@ -1837,12 +1970,14 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       content: item.content || '',
       event_date: item.event_date ? String(item.event_date).slice(0, 16) : '',
       image_url: item.image_url || '',
+      target_type: item.target_type || 'school',
+      visible_on_parent_app: item.visible_on_parent_app !== false,
     });
   }
 
   function cancelEditEvent() {
     setEditingEventId(null);
-    setEventForm({ title: '', content: '', event_date: '', image_url: '' });
+    setEventForm({ title: '', content: '', event_date: '', image_url: '', target_type: 'school', visible_on_parent_app: true });
   }
 
   function handleEventImageFile(event) {
@@ -1913,15 +2048,19 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         body: JSON.stringify({
           student_code: gradeForm.student_code,
           subject_name: normalizeSubjectName(gradeForm.subject_name),
+          semester: gradeForm.semester,
           midterm_score: Number(gradeForm.midterm_score || 0),
           final_score: Number(gradeForm.final_score || 0),
+          comment: gradeForm.comment,
         }),
       });
       setGradeForm({
         student_code: '',
         subject_name: '',
-        midterm_score: '0',
-        final_score: '0',
+        semester: 'Học kỳ 1',
+        midterm_score: '',
+        final_score: '',
+        comment: '',
       });
       await loadGrades();
     } catch (error) {
@@ -1958,75 +2097,87 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
   }
 
+  const menuItems = [
+    ['overview', 'Tổng quan'],
+    ['students', 'Học sinh'],
+    ['parents', 'Phụ huynh'],
+    ['attendance', 'Điểm danh'],
+    ['timetable', 'Thời khóa biểu'],
+    ['fees', 'Học phí'],
+    ['grades', 'Bảng điểm'],
+    ['announcements', 'Thông báo'],
+    ['chat', 'Tin nhắn'],
+    ['events', 'Sự kiện'],
+    ['system', 'Dữ liệu & đồng bộ'],
+    ['settings', 'Cài đặt trường'],
+    ['device', 'Kiểm thử điểm danh'],
+  ];
+  const activeMenuLabel = menuItems.find(([value]) => value === tab)?.[1] || 'Tổng quan';
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="mr-3 flex items-center gap-3">
-            <BrandIdentity compact />
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <div className="flex min-h-screen">
+        <aside className="w-64 shrink-0 border-r border-slate-200 bg-white p-4 shadow-sm">
+          <BrandIdentity compact />
+          <div className="mt-4 rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
+            Web Admin nhà trường
           </div>
-          <button
-            onClick={loadStudents}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Tải danh sách học sinh
-          </button>
-          <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600">
-            Trường {schoolId}
-          </span>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-slate-500">
-              👤 <strong>{authUser.full_name || authUser.email}</strong>
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">{roleLabel(authUser.role)}</span>
-            </span>
-            <button
-              onClick={onLogout}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
-            >
-              Đăng xuất
-            </button>
-          </div>
-        </div>
-      </header>
+          <nav className="mt-5 space-y-1">
+            {menuItems.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTab(value)}
+                className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${
+                  tab === value ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-4 grid gap-3 md:grid-cols-4">
-          {adminStats.map(([label, value]) => (
-            <div key={label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
-              <div className="mt-1 text-xl font-bold text-slate-950">{value}</div>
+        <div className="min-w-0 flex-1">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-5 py-3 backdrop-blur">
+            <div className="flex flex-wrap items-center gap-3">
+              <div>
+                <h1 className="text-xl font-bold">{activeMenuLabel}</h1>
+                <p className="text-sm text-slate-500">Trường học {schoolId}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  loadStudents();
+                  loadParents();
+                  loadTimetables();
+                  loadFees();
+                  loadAnnouncements();
+                  loadEvents();
+                  loadGrades();
+                  loadAttendanceLogs();
+                  loadSystemHealth();
+                }}
+                className="ml-auto rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+              >
+                {loading ? 'Đang tải...' : 'Làm mới'}
+              </button>
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div className="text-right">
+                  <div className="text-sm font-bold">{authUser.full_name || authUser.email}</div>
+                  <div className="text-xs text-slate-500">{roleLabel(authUser.role)}</div>
+                </div>
+                <button
+                  onClick={onLogout}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  Đăng xuất
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
+          </header>
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          {[
-            ['students', 'Quản lý Học sinh'],
-            ['provision', 'Cấp tài khoản Phụ huynh'],
-            ['parents', `Danh sách Phụ huynh (${parents.length})`],
-            ['timetable', 'Thời khóa biểu (Mon-Sat)'],
-            ['fees', 'Học phí & Thu phí'],
-            ['announcements', 'Thông báo'],
-            ['events', 'Sự kiện'],
-            ['grades', 'Bảng điểm'],
-            ['chat', 'Tin nhắn'],
-            ['attendance', 'Điểm danh'],
-            ['system', 'Đồng bộ hệ thống'],
-            ['device', 'Giả lập Quẹt thẻ'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => setTab(value)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                tab === value
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-slate-700 ring-1 ring-slate-200'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+          <main className="w-full px-5 py-5">
 
         {message ? (
           <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
@@ -2056,15 +2207,40 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         </datalist>
 
 
+        {tab === 'overview' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <SectionHeader
+              title="Tổng quan nhà trường"
+              description="Các chỉ số chính để nhân viên trường học theo dõi nhanh trong ngày."
+            />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {overviewStats.map(([label, value, target]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setTab(target)}
+                  className="rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-blue-200 hover:bg-blue-50"
+                >
+                  <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                  <div className="mt-2 text-3xl font-black text-slate-950">{value}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {tab === 'students' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Danh sách học sinh</h2>
+            <SectionHeader
+              title="Quản lý học sinh"
+              description="Thêm học sinh, nhập từ Excel và xem danh sách theo khối/lớp."
+            />
+            <h3 className="mb-2 text-sm font-bold text-slate-700">Thêm học sinh</h3>
             <form onSubmit={editingStudentId ? updateStudent : createStudent} className="mb-4 grid gap-2 md:grid-cols-4">
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Mã học sinh"
                 value={studentForm.student_code}
-                disabled={Boolean(editingStudentId)}
                 onChange={(e) =>
                   setStudentForm((prev) => ({ ...prev, student_code: e.target.value }))
                 }
@@ -2099,11 +2275,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               ) : null}
             </form>
 
-            {renderApiImportPanel('students', 'Nhập danh sách học sinh qua API', loadStudents)}
-
             {/* ── Excel Import ── */}
             <div className="mb-4 rounded-lg border border-dashed border-blue-300 bg-blue-50 p-4">
-              <p className="mb-2 text-sm font-semibold text-blue-800">📥 Import từ Excel</p>
+              <p className="mb-2 text-sm font-semibold text-blue-800">Nhập học sinh từ Excel</p>
               <p className="mb-3 text-xs text-blue-600">
                 File Excel cần có các cột: <strong>student_code</strong> (hoặc "Mã học sinh"), <strong>full_name</strong> (hoặc "Họ và tên"), <strong>class_name</strong> (hoặc "Lớp"). Dữ liệu trùng mã sẽ được cập nhật (upsert).
               </p>
@@ -2129,7 +2303,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     disabled={importLoading}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
                   >
-                    {importLoading ? '⏳ Đang import...' : `⬆️ Import ${importPreview.length} học sinh`}
+                    {importLoading ? 'Đang nhập...' : `Nhập ${importPreview.length} học sinh`}
                   </button>
                 )}
                 {importPreview.length > 0 && (
@@ -2246,7 +2420,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         {tab === 'timetable' && (
           <>
           <div className="mt-4 rounded-lg border border-dashed border-emerald-300 bg-emerald-50 p-4">
-            <p className="mb-2 text-sm font-semibold text-emerald-800">📥 Import TKB từ Excel</p>
+            <p className="mb-2 text-sm font-semibold text-emerald-800">Nhập thời khóa biểu từ Excel</p>
             <p className="mb-3 text-xs text-emerald-700">
               Cần cột: <strong>lớp</strong> (class_id), <strong>môn học</strong> (subject_name),
               <strong> thứ</strong> (day_of_week, 1=T2..6=T7), <strong>giờ bắt đầu</strong>,
@@ -2259,7 +2433,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               {ttImportPreview.length > 0 && (
                 <button type="button" onClick={submitTimetableImport} disabled={ttImportLoading}
                   className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400">
-                  {ttImportLoading ? '⏳ Đang import...' : `⬆️ Import ${ttImportPreview.length} tiết`}
+                  {ttImportLoading ? 'Đang nhập...' : `Nhập ${ttImportPreview.length} tiết`}
                 </button>
               )}
               {ttImportPreview.length > 0 && (
@@ -2293,58 +2467,82 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               </div>
             )}
           </div>
-          {renderApiImportPanel('timetables', 'Nhập thời khóa biểu qua API', loadTimetables)}
           </>
         )}
 
         {tab === 'provision' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Tạo tài khoản phụ huynh</h2>
+            <SectionHeader
+              title="Cấp tài khoản phụ huynh"
+              description="Chọn học sinh, nhập thông tin phụ huynh rồi tạo tài khoản truy cập ứng dụng."
+            />
             
-            <div className="mb-3 grid gap-2 md:grid-cols-2">
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={selectedStudentId}
-                onChange={(e) => setSelectedStudentId(e.target.value)}
-              >
-                <option value="">Chọn học sinh</option>
-                {students.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.student_code} - {student.full_name}
-                  </option>
-                ))}
-              </select>
-              
+            <div className="mb-3 grid gap-3 md:grid-cols-2">
+              <div>
+                <FieldLabel>1. Chọn học sinh</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={selectedStudentId}
+                  onChange={(e) => setSelectedStudentId(e.target.value)}
+                >
+                  <option value="">Chọn học sinh cần liên kết</option>
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.student_code} - {student.full_name} - {student.class_name || 'Chưa có lớp'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <FieldLabel>2. Quan hệ với học sinh</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={parentForm.relationship}
+                  onChange={(e) => setParentForm(prev => ({ ...prev, relationship: e.target.value }))}
+                >
+                  <option value="father">Bố</option>
+                  <option value="mother">Mẹ</option>
+                  <option value="guardian">Người giám hộ</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>3. Họ tên phụ huynh</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Nhập họ tên phụ huynh"
+                  value={parentForm.parent_name}
+                  onChange={(e) => setParentForm(prev => ({ ...prev, parent_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <FieldLabel>4. Số điện thoại hoặc email</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Số điện thoại"
+                  value={parentForm.parent_phone}
+                  onChange={(e) => setParentForm(prev => ({ ...prev, parent_phone: e.target.value }))}
+                />
+              </div>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Họ tên phụ huynh (tùy chọn)"
-                value={parentForm.parent_name}
-                onChange={(e) => setParentForm(prev => ({ ...prev, parent_name: e.target.value }))}
-              />
-              
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Email (tùy chọn, mặc định: parent.{student_code}@school.local)"
+                placeholder="Email phụ huynh nếu có"
                 type="email"
                 value={parentForm.parent_email}
                 onChange={(e) => setParentForm(prev => ({ ...prev, parent_email: e.target.value }))}
               />
-              
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Số điện thoại (tùy chọn)"
-                value={parentForm.parent_phone}
-                onChange={(e) => setParentForm(prev => ({ ...prev, parent_phone: e.target.value }))}
-              />
-              
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Mật khẩu (tùy chọn, mặc định: Parent@{student_code})"
+                placeholder="Mật khẩu tạm nếu cần"
                 type="password"
                 value={parentForm.password}
                 onChange={(e) => setParentForm(prev => ({ ...prev, password: e.target.value }))}
               />
             </div>
+            {!selectedStudentId ? (
+              <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Hãy chọn học sinh trước khi tạo tài khoản phụ huynh.
+              </div>
+            ) : null}
             
             <button
               onClick={provisionParent}
@@ -2370,16 +2568,28 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
         {tab === 'parents' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Danh sách tài khoản phụ huynh</h2>
+            <SectionHeader
+              title="Phụ huynh"
+              description="Theo dõi tài khoản phụ huynh và học sinh đã liên kết."
+              actions={(
+                <button
+                  type="button"
+                  onClick={() => setTab('provision')}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Cấp tài khoản phụ huynh
+                </button>
+              )}
+            />
             <button
               onClick={loadParents}
               className="mb-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
             >
-              Tải danh sách
+              Làm mới danh sách
             </button>
             
             {parents.length === 0 ? (
-              <p className="text-slate-500">Chưa có tài khoản phụ huynh nào.</p>
+              <EmptyState message="Chưa có phụ huynh nào được liên kết. Hãy cấp tài khoản phụ huynh cho học sinh trước." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -2388,7 +2598,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                       <th className="py-2">Họ tên</th>
                       <th className="py-2">Email</th>
                       <th className="py-2">Số điện thoại</th>
-                      <th className="py-2">Học sinh liên kết</th>
+                      <th className="py-2">Trạng thái</th>
+                      <th className="py-2">Số học sinh liên kết</th>
+                      <th className="py-2">Lần đăng nhập gần nhất</th>
+                      <th className="py-2">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2397,7 +2610,18 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                         <td className="py-2">{parent.full_name || '-'}</td>
                         <td className="py-2">{parent.email}</td>
                         <td className="py-2">{parent.phone || '-'}</td>
-                        <td className="py-2">{parent.student_name} ({parent.student_code})</td>
+                        <td className="py-2"><StatusBadge className={parent.is_active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}>{parent.is_active === false ? 'Đã khóa' : 'Đang hoạt động'}</StatusBadge></td>
+                        <td className="py-2">{parent.linked_students_count || (parent.student_code ? 1 : 0)}</td>
+                        <td className="py-2">{formatDateTime(parent.last_sign_in_at)}</td>
+                        <td className="py-2">
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => showParentDetail(parent)} className="rounded bg-slate-100 px-2 py-1 text-slate-700">Xem chi tiết</button>
+                            <button type="button" onClick={() => resetParentPassword(parent)} className="rounded bg-amber-100 px-2 py-1 text-amber-700">Đặt lại mật khẩu</button>
+                            <button type="button" onClick={() => toggleParentActive(parent)} className="rounded bg-rose-100 px-2 py-1 text-rose-700">
+                              {parent.is_active === false ? 'Mở khóa' : 'Khóa'}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2642,10 +2866,39 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
         {tab === 'fees' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Quản lý học phí / khoản thu</h2>
-            <form onSubmit={editingFeeId ? updateFee : createFee} className="mb-4 grid gap-2 md:grid-cols-3">
+            <SectionHeader
+              title="Học phí & khoản thu"
+              description="Tạo khoản thu cho toàn trường, khối, lớp hoặc học sinh cụ thể."
+            />
+            <form onSubmit={editingFeeId ? updateFee : createFee} className="mb-4 grid gap-3 md:grid-cols-3">
               <div>
-                <FieldLabel>Mã học sinh</FieldLabel>
+                <FieldLabel>Tên khoản thu</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: Học phí tháng 6"
+                  value={feeForm.fee_name}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, fee_name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Áp dụng cho</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={feeForm.apply_scope}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, apply_scope: e.target.value }))
+                  }
+                >
+                  <option value="school">Toàn trường</option>
+                  <option value="grade">Khối</option>
+                  <option value="class">Lớp</option>
+                  <option value="student">Học sinh cụ thể</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Học sinh cụ thể</FieldLabel>
                 <input
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   placeholder="VD: HS0085"
@@ -2671,7 +2924,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 />
               </div>
               <div>
-                <FieldLabel>Tổng tiền</FieldLabel>
+                <FieldLabel>Số tiền</FieldLabel>
                 <input
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   placeholder="VD: 500000"
@@ -2682,11 +2935,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 />
               </div>
               <div className="md:col-span-3">
-                <FieldLabel>Khoản học phí theo môn</FieldLabel>
+                <FieldLabel>Khoản thu chính</FieldLabel>
                 <textarea
                   rows={3}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  placeholder={'Toán: 500000\nVăn 300.000'}
+                  placeholder={'Học phí tháng 6: 500000\nTiền ăn bán trú: 300000'}
                   value={feeForm.subject_fees_text}
                   onChange={(e) =>
                     setFeeForm((prev) => ({ ...prev, subject_fees_text: e.target.value }))
@@ -2705,36 +2958,48 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   }
                 />
               </div>
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={feeForm.payment_status}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, payment_status: e.target.value }))
-                }
-              >
-                <option value="unpaid">Chưa thanh toán</option>
-                <option value="partial">Thanh toán một phần</option>
-                <option value="paid">Đã thanh toán</option>
-              </select>
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={feeForm.payment_method}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, payment_method: e.target.value }))
-                }
-              >
-                <option value="">-- Phương thức --</option>
-                <option value="online">Online</option>
-                <option value="cash">Cash</option>
-              </select>
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                type="datetime-local"
-                value={feeForm.paid_at}
-                onChange={(e) =>
-                  setFeeForm((prev) => ({ ...prev, paid_at: e.target.value }))
-                }
-              />
+              <div>
+                <FieldLabel>Trạng thái</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={feeForm.payment_status}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, payment_status: e.target.value }))
+                  }
+                >
+                  <option value="unpaid">Chưa thanh toán</option>
+                  <option value="partial">Thanh toán một phần</option>
+                  <option value="paid">Đã thanh toán</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Phương thức thu</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={feeForm.payment_method}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, payment_method: e.target.value }))
+                  }
+                >
+                  <option value="">Chưa chọn</option>
+                  <option value="online">Chuyển khoản</option>
+                  <option value="cash">Tiền mặt</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Hạn thanh toán</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  type="datetime-local"
+                  value={feeForm.paid_at}
+                  onChange={(e) =>
+                    setFeeForm((prev) => ({ ...prev, paid_at: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="md:col-span-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                Mẹo: nếu muốn thu theo toàn trường, khối hoặc lớp, chọn phạm vi trước rồi dùng danh sách bên dưới để chọn học sinh/lớp cần tạo khoản. Phần kết nối dữ liệu hàng loạt nằm ở mục Dữ liệu & đồng bộ.
+              </div>
               <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
                 {editingFeeId ? 'Cập nhật thông báo phí' : 'Tạo thông báo phí'}
               </button>
@@ -2805,7 +3070,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg bg-white p-3 ring-1 ring-emerald-100">
-                    <div className="mb-2 font-semibold text-slate-900">Học phí theo môn</div>
+                    <div className="mb-2 font-semibold text-slate-900">Khoản thu chính</div>
                     {mapEntries(selectedFee.subject_fees).length ? mapEntries(selectedFee.subject_fees).map(([label, amount]) => (
                       <div key={label} className="flex justify-between border-t border-slate-100 py-1">
                         <span>{label}</span>
@@ -2868,7 +3133,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     <span>Thời gian: {formatDateTime(f.paid_at)}</span>
                   </div>
                   <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
-                    <span>Học phí: {mapEntries(f.subject_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
+                    <span>Khoản thu chính: {mapEntries(f.subject_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
                     <span>Khoản khác: {mapEntries(f.other_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
                   </div>
                 </div>
@@ -2876,13 +3141,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             </div>
             {displayedFees.length === 0 ? <EmptyState message="Chưa có khoản phí cho học sinh hoặc bộ lọc hiện tại." /> : null}
 
-            {renderApiImportPanel('fees', 'Nhập học phí và khoản thu qua API', loadFees)}
-
             {/* ── Excel Import fees ── */}
             <div className="mt-4 rounded-lg border border-dashed border-orange-300 bg-orange-50 p-4">
-              <p className="mb-2 text-sm font-semibold text-orange-800">📥 Import học phí từ Excel</p>
+              <p className="mb-2 text-sm font-semibold text-orange-800">Nhập học phí từ Excel</p>
               <p className="mb-3 text-xs text-orange-700">
-                Cần cột: <strong>mã học sinh</strong>, <strong>tổng tiền</strong>, <strong>trạng thái</strong> (unpaid/partial/paid), phương thức (online/cash)
+                Cần cột: <strong>mã học sinh</strong>, <strong>tổng tiền</strong>, <strong>trạng thái</strong> (chưa thanh toán/thanh toán một phần/đã thanh toán), phương thức (chuyển khoản/tiền mặt)
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <input ref={feeFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFeesExcelFile} />
@@ -2891,7 +3154,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 {feeImportPreview.length > 0 && (
                   <button type="button" onClick={submitFeesImport} disabled={feeImportLoading}
                     className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400">
-                    {feeImportLoading ? '⏳ Đang import...' : `⬆️ Import ${feeImportPreview.length} khoản phí`}
+                    {feeImportLoading ? 'Đang nhập...' : `Nhập ${feeImportPreview.length} khoản phí`}
                   </button>
                 )}
                 {feeImportPreview.length > 0 && (
@@ -2928,10 +3191,13 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
         {tab === 'announcements' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Thông báo trường học</h2>
-            <form onSubmit={createAnnouncement} className="mb-4 grid gap-2">
+            <SectionHeader
+              title="Thông báo trường học"
+              description="Gửi thông báo tới phụ huynh theo toàn trường, khối, lớp hoặc học sinh cụ thể."
+            />
+            <form onSubmit={createAnnouncement} className="mb-4 grid gap-3 md:grid-cols-3">
               <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2"
                 placeholder="Tiêu đề thông báo"
                 value={announcementForm.title}
                 onChange={(e) =>
@@ -2939,7 +3205,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 }
               />
               <textarea
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-3"
                 placeholder="Nội dung thông báo"
                 rows={4}
                 value={announcementForm.content}
@@ -2947,6 +3213,22 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   setAnnouncementForm((prev) => ({ ...prev, content: e.target.value }))
                 }
               />
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={announcementForm.target_type}
+                onChange={(e) =>
+                  setAnnouncementForm((prev) => ({
+                    ...prev,
+                    target_type: e.target.value,
+                    is_general: e.target.value === 'school',
+                  }))
+                }
+              >
+                <option value="school">Toàn trường</option>
+                <option value="grade">Theo khối</option>
+                <option value="class">Theo lớp</option>
+                <option value="student">Theo học sinh/phụ huynh cụ thể</option>
+              </select>
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 value={announcementForm.priority}
@@ -2966,17 +3248,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     setAnnouncementForm((prev) => ({ ...prev, send_notification: e.target.checked }))
                   }
                 />
-                Gửi push tới phụ huynh
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={announcementForm.is_general}
-                  onChange={(e) =>
-                    setAnnouncementForm((prev) => ({ ...prev, is_general: e.target.checked }))
-                  }
-                />
-                Thông báo chung toàn trường
+                Hiển thị trên ứng dụng phụ huynh
               </label>
               <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
                 Đăng thông báo
@@ -3034,25 +3306,32 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 onClick={loadEvents}
                 className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
               >
-                Tải lại
+                Làm mới
               </button>
             </div>
-            <form onSubmit={createEvent} className="mb-4 grid gap-2">
-              <div className="grid gap-2 md:grid-cols-2">
+            <form onSubmit={createEvent} className="mb-4 grid gap-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <FieldLabel>Tiêu đề sự kiện</FieldLabel>
                 <input
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   placeholder="Tiêu đề sự kiện"
                   value={eventForm.title}
                   onChange={(e) => setEventForm((prev) => ({ ...prev, title: e.target.value }))}
                 />
+                </div>
+                <div>
+                  <FieldLabel>Thời gian</FieldLabel>
                 <input
                   type="datetime-local"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   value={eventForm.event_date}
                   onChange={(e) => setEventForm((prev) => ({ ...prev, event_date: e.target.value }))}
                 />
+                </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <FieldLabel>Ảnh minh họa</FieldLabel>
                 <input
                   ref={eventImageFileRef}
                   type="file"
@@ -3087,11 +3366,34 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
               </div>
               <textarea
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Nội dung sự kiện hoặc hoạt động"
+                placeholder="Nội dung"
                 rows={4}
                 value={eventForm.content}
                 onChange={(e) => setEventForm((prev) => ({ ...prev, content: e.target.value }))}
               />
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <FieldLabel>Đối tượng nhận</FieldLabel>
+                  <select
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={eventForm.target_type}
+                    onChange={(e) => setEventForm((prev) => ({ ...prev, target_type: e.target.value }))}
+                  >
+                    <option value="school">Toàn trường</option>
+                    <option value="grade">Theo khối</option>
+                    <option value="class">Theo lớp</option>
+                    <option value="student">Theo học sinh/phụ huynh cụ thể</option>
+                  </select>
+                </div>
+                <label className="mt-6 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={eventForm.visible_on_parent_app}
+                    onChange={(e) => setEventForm((prev) => ({ ...prev, visible_on_parent_app: e.target.checked }))}
+                  />
+                  Hiển thị trên ứng dụng phụ huynh
+                </label>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
                   {editingEventId ? 'Cập nhật sự kiện' : 'Đăng sự kiện'}
@@ -3121,7 +3423,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     <img src={item.image_url} alt="" className="h-40 w-full object-cover" />
                   ) : (
                     <div className="flex h-32 items-center justify-center bg-blue-50 text-blue-700">
-                      Sự kiện SYNO
+                      Chưa có ảnh minh họa
                     </div>
                   )}
                   <div className="p-3">
@@ -3160,46 +3462,84 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
         {tab === 'grades' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Bảng điểm học sinh</h2>
-            <form onSubmit={createGrade} className="mb-4 grid gap-2 md:grid-cols-4">
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Mã học sinh"
-                list="student-code-options"
-                value={gradeForm.student_code}
-                onFocus={openInputPicker}
-                onClick={openInputPicker}
-                onChange={(e) =>
-                  setGradeForm((prev) => ({ ...prev, student_code: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Môn học"
-                list="subject-options"
-                value={gradeForm.subject_name}
-                onFocus={openInputPicker}
-                onClick={openInputPicker}
-                onChange={(e) =>
-                  setGradeForm((prev) => ({ ...prev, subject_name: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Giữa kỳ"
-                value={gradeForm.midterm_score}
-                onChange={(e) =>
-                  setGradeForm((prev) => ({ ...prev, midterm_score: e.target.value }))
-                }
-              />
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Cuối kỳ"
-                value={gradeForm.final_score}
-                onChange={(e) =>
-                  setGradeForm((prev) => ({ ...prev, final_score: e.target.value }))
-                }
-              />
+            <SectionHeader
+              title="Bảng điểm học sinh"
+              description="Nhập điểm theo học sinh, môn học và học kỳ."
+            />
+            <form onSubmit={createGrade} className="mb-4 grid gap-3 md:grid-cols-3">
+              <div>
+                <FieldLabel>Chọn học sinh</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Mã học sinh"
+                  list="student-code-options"
+                  value={gradeForm.student_code}
+                  onFocus={openInputPicker}
+                  onClick={openInputPicker}
+                  onChange={(e) =>
+                    setGradeForm((prev) => ({ ...prev, student_code: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Môn học</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Chọn hoặc nhập môn học"
+                  list="subject-options"
+                  value={gradeForm.subject_name}
+                  onFocus={openInputPicker}
+                  onClick={openInputPicker}
+                  onChange={(e) =>
+                    setGradeForm((prev) => ({ ...prev, subject_name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Học kỳ</FieldLabel>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={gradeForm.semester}
+                  onChange={(e) => setGradeForm((prev) => ({ ...prev, semester: e.target.value }))}
+                >
+                  <option>Học kỳ 1</option>
+                  <option>Học kỳ 2</option>
+                  <option>Cả năm</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Điểm giữa kỳ</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: 8.0"
+                  value={gradeForm.midterm_score}
+                  onChange={(e) =>
+                    setGradeForm((prev) => ({ ...prev, midterm_score: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Điểm cuối kỳ</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="VD: 8.5"
+                  value={gradeForm.final_score}
+                  onChange={(e) =>
+                    setGradeForm((prev) => ({ ...prev, final_score: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>Nhận xét</FieldLabel>
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Nhận xét nếu cần"
+                  value={gradeForm.comment}
+                  onChange={(e) =>
+                    setGradeForm((prev) => ({ ...prev, comment: e.target.value }))
+                  }
+                />
+              </div>
               <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
                 Thêm điểm
               </button>
@@ -3254,11 +3594,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
             </div>
             {displayedGrades.length === 0 ? <EmptyState message="Chưa có bảng điểm cho học sinh hoặc bộ lọc hiện tại." /> : null}
 
-            {renderApiImportPanel('grades', 'Nhập bảng điểm qua API', loadGrades)}
-
             {/* ── Excel Import grades ── */}
             <div className="mt-4 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 p-4">
-              <p className="mb-2 text-sm font-semibold text-indigo-800">📥 Import bảng điểm từ Excel</p>
+              <p className="mb-2 text-sm font-semibold text-indigo-800">Nhập bảng điểm từ Excel</p>
               <p className="mb-3 text-xs text-indigo-700">
                 Cần cột: <strong>mã học sinh</strong>, <strong>môn học</strong>, <strong>giữa kỳ</strong>, <strong>cuối kỳ</strong>, học kỳ, năm học
               </p>
@@ -3269,7 +3607,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 {gradeImportPreview.length > 0 && (
                   <button type="button" onClick={submitGradesImport} disabled={gradeImportLoading}
                     className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400">
-                    {gradeImportLoading ? '⏳ Đang import...' : `⬆️ Import ${gradeImportPreview.length} bản ghi`}
+                    {gradeImportLoading ? 'Đang nhập...' : `Nhập ${gradeImportPreview.length} bản ghi`}
                   </button>
                 )}
                 {gradeImportPreview.length > 0 && (
@@ -3307,83 +3645,93 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
 
         {tab === 'chat' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Tin nhắn phụ huynh</h2>
-            <div className="mb-4 grid gap-2 md:grid-cols-[220px_1fr_auto]">
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={chatForm.student_code}
-                onChange={(e) => {
-                  const studentCode = e.target.value;
-                  setChatForm((prev) => ({ ...prev, student_code: studentCode }));
-                  loadChatMessages(studentCode);
-                }}
-              >
-                <option value="">Tất cả học sinh</option>
-                {students.map((student) => (
-                  <option key={student.id} value={student.student_code}>
-                    {student.student_code} - {student.full_name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Tìm tin nhắn..."
-                value={chatSearch}
-                onChange={(e) => setChatSearch(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => loadChatMessages(chatForm.student_code)}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
-              >
-                Tải lại
-              </button>
-            </div>
-            <form onSubmit={sendChatMessage} className="mb-4 grid gap-2 md:grid-cols-[220px_1fr_auto]">
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={chatForm.student_code}
-                onChange={(e) => setChatForm((prev) => ({ ...prev, student_code: e.target.value }))}
-                required
-              >
-                <option value="">Chọn học sinh</option>
-                {students.map((student) => (
-                  <option key={student.id} value={student.student_code}>
-                    {student.student_code} - {student.full_name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Nhập nội dung trả lời"
-                value={chatForm.message_text}
-                onChange={(e) => setChatForm((prev) => ({ ...prev, message_text: e.target.value }))}
-                required
-              />
-              <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
-                Gửi
-              </button>
-            </form>
-            <div className="space-y-2">
-              {filteredChatMessages.map((item) => (
-                <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <strong>{item.student_code}</strong>
-                    <span className="text-xs text-slate-500">
-                      {item.sender_role} - {item.sender_name || 'Không rõ'} - {item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : ''}
-                    </span>
-                  </div>
-                  <p className="mt-1 whitespace-pre-wrap text-slate-700">{item.message_text}</p>
+            <SectionHeader title="Tin nhắn phụ huynh" description="Trao đổi với phụ huynh theo từng học sinh như hộp thư." />
+            <div className="grid min-h-[520px] gap-4 lg:grid-cols-[300px_1fr]">
+              <aside className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <input
+                  className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="Tìm phụ huynh hoặc học sinh..."
+                  value={chatSearch}
+                  onChange={(e) => setChatSearch(e.target.value)}
+                />
+                <div className="max-h-[430px] space-y-2 overflow-y-auto">
+                  {students.map((student) => (
+                    <button
+                      key={student.id}
+                      type="button"
+                      onClick={() => {
+                        setChatForm((prev) => ({ ...prev, student_code: student.student_code }));
+                        loadChatMessages(student.student_code);
+                      }}
+                      className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${chatForm.student_code === student.student_code ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
+                    >
+                      <div className="font-semibold">{student.full_name}</div>
+                      <div className="text-xs text-slate-500">{student.student_code} - {student.class_name || 'Chưa có lớp'}</div>
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </aside>
+              <div className="flex min-h-[520px] flex-col rounded-xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <div className="font-bold">{chatForm.student_code ? `Hội thoại với ${chatForm.student_code}` : 'Chọn học sinh để xem hội thoại'}</div>
+                  <button
+                    type="button"
+                    onClick={() => loadChatMessages(chatForm.student_code)}
+                    className="mt-2 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Làm mới hội thoại
+                  </button>
+                </div>
+                <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                  {filteredChatMessages.map((item) => {
+                    const fromSchool = String(item.sender_role || '').toLowerCase() !== 'parent';
+                    return (
+                      <div key={item.id} className={`flex ${fromSchool ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${fromSchool ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>
+                          <div className={`mb-1 text-xs font-semibold ${fromSchool ? 'text-blue-100' : 'text-slate-500'}`}>
+                            {senderRoleLabel(item.sender_role)} - {item.sender_name || 'Không rõ'} - {formatDateTime(item.created_at)}
+                          </div>
+                          <p className="whitespace-pre-wrap">{item.message_text}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {filteredChatMessages.length === 0 ? <EmptyState message="Chưa có tin nhắn trong hội thoại này." /> : null}
+                </div>
+                <form onSubmit={sendChatMessage} className="grid gap-2 border-t border-slate-200 p-3 md:grid-cols-[1fr_auto]">
+                  <input
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Nhập nội dung phản hồi cho phụ huynh"
+                    value={chatForm.message_text}
+                    onChange={(e) => setChatForm((prev) => ({ ...prev, message_text: e.target.value }))}
+                    required
+                  />
+                  <button disabled={!chatForm.student_code} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400">
+                    Gửi phản hồi
+                  </button>
+                </form>
+              </div>
             </div>
-            {filteredChatMessages.length === 0 ? <EmptyState message="Chưa có tin nhắn phù hợp với bộ lọc." /> : null}
           </section>
         ) : null}
 
         {tab === 'attendance' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <SectionHeader title="Điểm danh" description="Lọc và theo dõi dữ liệu vào/ra của học sinh." />
             <div className="mb-4 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Lớp</label>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={attendanceFilters.class_name}
+                  onChange={(e) => setAttendanceFilters((prev) => ({ ...prev, class_name: e.target.value }))}
+                >
+                  <option value="">Tất cả lớp</option>
+                  {classOptions.map((className) => (
+                    <option key={className} value={className}>{className}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-500">Học sinh</label>
                 <select
@@ -3397,6 +3745,31 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                       {s.student_code} - {s.full_name}
                     </option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Loại điểm danh</label>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={attendanceFilters.log_type}
+                  onChange={(e) => setAttendanceFilters((prev) => ({ ...prev, log_type: e.target.value }))}
+                >
+                  <option value="">Tất cả</option>
+                  <option value="check_in">Vào</option>
+                  <option value="check_out">Ra</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Trạng thái</label>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={attendanceFilters.status_detail}
+                  onChange={(e) => setAttendanceFilters((prev) => ({ ...prev, status_detail: e.target.value }))}
+                >
+                  <option value="">Tất cả</option>
+                  <option value="on_time">Đúng giờ</option>
+                  <option value="late">Muộn</option>
+                  <option value="unknown">Không xác định</option>
                 </select>
               </div>
               <div>
@@ -3446,7 +3819,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {attendanceLogs.map((log) => (
+                  {attendanceLogs
+                    .filter((log) => !attendanceFilters.class_name || log.class_name === attendanceFilters.class_name)
+                    .filter((log) => !attendanceFilters.log_type || log.log_type === attendanceFilters.log_type)
+                    .filter((log) => !attendanceFilters.status_detail || log.status_detail === attendanceFilters.status_detail)
+                    .map((log) => (
                     <tr key={log.id} className="border-b">
                       <td className="py-2">{formatDateTime(log.scanned_at)}</td>
                       <td className="py-2">{log.student_code}</td>
@@ -3468,9 +3845,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">Giám sát đồng bộ hệ thống</h2>
+                <h2 className="text-lg font-semibold">Trạng thái hệ thống</h2>
                 <p className="text-sm text-slate-500">
-                  Theo dõi nhanh backend, Supabase, hàng đợi và dữ liệu đồng bộ gần nhất.
+                  Theo dõi kết nối dữ liệu và các thông tin vận hành chính.
                 </p>
               </div>
               <button
@@ -3482,13 +3859,13 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 }}
                 className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
               >
-                Tải lại trạng thái
+                Làm mới trạng thái
               </button>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               {[
-                ['Backend API', syncStatus.backendOk ? 'Đang hoạt động' : 'Cần kiểm tra', syncStatus.backendOk],
-                ['Supabase', syncStatus.supabaseUp ? 'Đang hoạt động' : 'Cần kiểm tra', syncStatus.supabaseUp],
+                ['Kết nối dữ liệu', syncStatus.backendOk ? 'Đang hoạt động' : 'Cần kiểm tra', syncStatus.backendOk],
+                ['Cơ sở dữ liệu', syncStatus.supabaseUp ? 'Đang hoạt động' : 'Cần kiểm tra', syncStatus.supabaseUp],
                 ['Hàng đợi điểm danh', syncStatus.queueEnabled ? 'Đang bật' : 'Chưa bật', syncStatus.queueEnabled],
               ].map(([label, value, ok]) => (
                 <div key={String(label)} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -3515,15 +3892,52 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 {syncStatus.error}
               </div>
             ) : null}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {renderApiImportPanel('students', 'Kết nối danh sách học sinh từ hệ thống có sẵn', loadStudents)}
+              {renderApiImportPanel('timetables', 'Kết nối thời khóa biểu từ hệ thống có sẵn', loadTimetables)}
+              {renderApiImportPanel('fees', 'Kết nối học phí và khoản thu từ hệ thống có sẵn', loadFees)}
+              {renderApiImportPanel('grades', 'Kết nối bảng điểm từ hệ thống có sẵn', loadGrades)}
+            </div>
+          </section>
+        ) : null}
+
+        {tab === 'settings' ? (
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <SectionHeader
+              title="Cài đặt trường"
+              description="Thông tin cấu hình hiển thị cho tài khoản nhà trường."
+            />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase text-slate-500">Trường học</div>
+                <div className="mt-2 text-lg font-bold">Trường học {schoolId}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase text-slate-500">Tài khoản đang dùng</div>
+                <div className="mt-2 text-lg font-bold">{authUser.full_name || authUser.email}</div>
+                <div className="text-sm text-slate-500">{roleLabel(authUser.role)}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTab('system')}
+                className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-left text-sky-800"
+              >
+                <div className="text-xs font-semibold uppercase">Dữ liệu & đồng bộ</div>
+                <div className="mt-2 text-sm font-semibold">Mở trạng thái hệ thống và kết nối dữ liệu</div>
+              </button>
+            </div>
           </section>
         ) : null}
 
         {tab === 'device' ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 text-lg font-semibold">Giả lập thiết bị quẹt thẻ</h2>
-            <p className="mb-3 text-sm text-slate-500">
-              Chọn học sinh và nhấn nút để giả lập quẹt thẻ check_in vào hệ thống.
-            </p>
+            <SectionHeader
+              title="Kiểm thử điểm danh"
+              description="Tạo một lượt điểm danh thử để nhân viên kiểm tra luồng dữ liệu."
+            />
+            <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Chức năng này chỉ dùng để kiểm thử nội bộ, không thay thế dữ liệu điểm danh thực tế.
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
@@ -3542,12 +3956,14 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 disabled={!selectedStudentId}
                 className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
               >
-                Giả lập quẹt thẻ
+                Tạo lượt kiểm thử
               </button>
             </div>
           </section>
         ) : null}
       </main>
+    </div>
+    </div>
     </div>
   );
 }
