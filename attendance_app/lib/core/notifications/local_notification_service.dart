@@ -24,7 +24,7 @@ class LocalNotificationService {
   static Future<void> initialize() async {
     if (_initialized) return;
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('@mipmap/launcher_icon');
     const ios = DarwinInitializationSettings();
     const windows = WindowsInitializationSettings(
       appName: 'SYNO',
@@ -42,10 +42,31 @@ class LocalNotificationService {
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    await androidPlugin?.requestNotificationsPermission();
     await androidPlugin?.createNotificationChannel(_androidChannel);
+    await androidPlugin?.requestNotificationsPermission();
 
     _initialized = true;
+  }
+
+  static Future<bool> requestNotificationPermission() async {
+    await initialize();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    final granted = await androidPlugin?.requestNotificationsPermission();
+    if (granted != null) return granted;
+    return areNotificationsEnabled();
+  }
+
+  static Future<bool> areNotificationsEnabled() async {
+    await initialize();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    final enabled = await androidPlugin?.areNotificationsEnabled();
+    return enabled ?? true;
   }
 
   static NotificationDisplayText resolveDisplayText(Map<String, dynamic> data) {

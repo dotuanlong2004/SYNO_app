@@ -27,6 +27,7 @@ class FcmService {
 
       final FirebaseMessaging messaging = FirebaseMessaging.instance;
 
+      await LocalNotificationService.requestNotificationPermission();
       await messaging.requestPermission(alert: true, badge: true, sound: true);
 
       await messaging.setForegroundNotificationPresentationOptions(
@@ -37,12 +38,12 @@ class FcmService {
 
       final token = await messaging.getToken();
       if (token != null && token.isNotEmpty) {
-        await _onTokenReceived(token);
+        await _sendTokenSafely(token);
       }
 
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         if (newToken.isNotEmpty) {
-          await _onTokenReceived(newToken);
+          await _sendTokenSafely(newToken);
         }
       });
 
@@ -63,6 +64,16 @@ class FcmService {
       debugPrintStack(stackTrace: stackTrace);
     } finally {
       _initializing = false;
+    }
+  }
+
+  Future<void> _sendTokenSafely(String token) async {
+    try {
+      await _onTokenReceived(token);
+      debugPrint('FCM token saved to SYNO backend (${token.length} chars)');
+    } catch (error, stackTrace) {
+      debugPrint('FCM token save failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 }

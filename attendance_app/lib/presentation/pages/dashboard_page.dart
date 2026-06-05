@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../core/notifications/local_notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/chat_message.dart';
@@ -88,6 +89,40 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   int _tabIndex = 0;
+  bool _notificationNoticeShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureNotificationPermission();
+    });
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    if (!mounted || _notificationNoticeShown) return;
+    _notificationNoticeShown = true;
+
+    final granted =
+        await LocalNotificationService.requestNotificationPermission();
+    if (!mounted || granted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bật thông báo SYNO'),
+        content: const Text(
+          'Điện thoại đang tắt quyền thông báo cho SYNO. Hãy bật thông báo trong cài đặt ứng dụng để nhận điểm danh và thông báo từ nhà trường.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
