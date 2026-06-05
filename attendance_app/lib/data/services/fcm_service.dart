@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -16,9 +18,16 @@ class FcmService {
 
   bool _initialized = false;
   bool _initializing = false;
+  Timer? _tokenRetryTimer;
+  String? _pendingToken;
+  int _tokenRetryCount = 0;
 
   Future<void> initialize() async {
-    if (_initialized || _initializing) return;
+    if (_initialized) {
+      await syncToken();
+      return;
+    }
+    if (_initializing) return;
     _initializing = true;
 
     try {
@@ -36,10 +45,7 @@ class FcmService {
         sound: true,
       );
 
-      final token = await messaging.getToken();
-      if (token != null && token.isNotEmpty) {
-        await _sendTokenSafely(token);
-      }
+      await syncToken();
 
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         if (newToken.isNotEmpty) {
@@ -67,13 +73,47 @@ class FcmService {
     }
   }
 
-  Future<void> _sendTokenSafely(String token) async {
+  Future<void> syncToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _sendTokenSafely(token);
+      }
+    } catch (error, stackTrace) {
+      debugPrint('FCM token sync failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<bool> _sendTokenSafely(String token) async {
     try {
       await _onTokenReceived(token);
+      _pendingToken = null;
+      _tokenRetryCount = 0;
+      _tokenRetryTimer?.cancel();
+      _tokenRetryTimer = null;
       debugPrint('FCM token saved to SYNO backend (${token.length} chars)');
+      return true;
     } catch (error, stackTrace) {
       debugPrint('FCM token save failed: $error');
       debugPrintStack(stackTrace: stackTrace);
+      _scheduleTokenRetry(token);
+      return false;
     }
+  }
+
+  void _scheduleTokenRetry(String token) {
+    if (_tokenRetryCount >= 6) return;
+
+    _pendingToken = token;
+    _tokenRetryTimer?.cancel();
+    final delaySeconds = _tokenRetryCount < 2 ? 10 : 30;
+    _tokenRetryCount += 1;
+    _tokenRetryTimer = Timer(Duration(seconds: delaySeconds), () async {
+      final retryToken = _pendingToken;
+      if (retryToken != null && retryToken.isNotEmpty) {
+        await _sendTokenSafely(retryToken);
+      }
+    });
   }
 }
