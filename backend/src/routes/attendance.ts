@@ -24,9 +24,9 @@ async function clearInvalidFcmToken(userId) {
 
 function formatLocalTime(iso) {
     if (iso instanceof Date) {
-        return DateTime.fromJSDate(iso).setZone(TZ).toFormat('HH:mm');
+        return DateTime.fromJSDate(iso).setZone(TZ).toFormat('HH:mm dd/MM/yyyy');
     }
-    return DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(TZ).toFormat('HH:mm');
+    return DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(TZ).toFormat('HH:mm dd/MM/yyyy');
 }
 
 async function getStudentNotificationTarget(supabase, studentId) {
@@ -52,21 +52,25 @@ async function getStudentNotificationTarget(supabase, studentId) {
 async function sendAttendancePush({ student, parent, studentCode, logType, scannedAt }) {
     if (!student || !parent?.fcm_token) return;
 
-    const verb = logType === 'check_in' ? 'vao' : 'ra';
+    const verb = logType === 'check_in' ? 'vào' : 'ra';
     const localTime = formatLocalTime(scannedAt);
+    const notificationKey = `attendance:${studentCode}:${logType}:${scannedAt.toISOString()}`;
 
     try {
         await sendPushNotification({
             token: parent.fcm_token,
-            title: 'Thong bao diem danh',
-            body: `Hoc sinh ${student.full_name || studentCode} da diem danh ${verb} luc ${localTime}.`,
+            title: 'Thông báo điểm danh',
+            body: `${student.full_name || studentCode} đã điểm danh ${verb} lúc ${localTime}.`,
             data: {
+                type: 'attendance',
+                notification_key: notificationKey,
                 student_id: String(student.id),
                 student_code: studentCode,
                 check_type: verb,
                 log_type: logType,
                 check_time: scannedAt.toISOString(),
             },
+            tag: notificationKey,
         });
     } catch (error) {
         if (isUnregisteredTokenError(error)) {

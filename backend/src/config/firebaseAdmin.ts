@@ -57,8 +57,25 @@ function isUnregisteredTokenError(error) {
   );
 }
 
+function buildNotificationTag(payload) {
+  const data = payload.data || {};
+  return (
+    payload.tag ||
+    data.notification_key ||
+    data.attendance_log_id ||
+    [
+      data.type || 'syno',
+      data.student_code || data.student_id || '',
+      data.log_type || data.check_type || '',
+      data.check_time || data.scanned_at || '',
+    ]
+      .filter(Boolean)
+      .join(':')
+  );
+}
+
 /**
- * @param {{ token: string, title: string, body: string, data?: Record<string, string> }} payload
+ * @param {{ token: string, title: string, body: string, data?: Record<string, string>, tag?: string }} payload
  */
 async function sendPushNotification(payload) {
   initializeFirebaseAdmin();
@@ -80,6 +97,7 @@ async function sendPushNotification(payload) {
       notification: {
         channelId: 'syno_channel',
         sound: 'default',
+        tag: buildNotificationTag(payload),
       },
     },
     apns: {

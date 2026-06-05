@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/notifications/local_notification_service.dart';
 import '../../core/network/api_config.dart';
 import '../../core/network/dio_client.dart';
 import '../../data/auth/auth_api.dart';
@@ -330,7 +329,6 @@ class AuthController extends Notifier<AuthState> {
 
       _lastAttendanceSignature = latestSignature;
       ref.invalidate(attendanceHistoryProvider);
-      await _showAttendanceUpdateNotification(records.first);
     } catch (_) {
       // Keep the last known state and retry on the next tick.
     }
@@ -342,23 +340,6 @@ class AuthController extends Notifier<AuthState> {
     if (records.isEmpty) return null;
     final latest = records.first;
     return '${latest.studentId}|${latest.timestamp.toIso8601String()}|${latest.logType.name}';
-  }
-
-  Future<void> _showAttendanceUpdateNotification(AttendanceRecord record) {
-    final action = record.logType == AttendanceLogType.checkOut
-        ? 'điểm danh ra'
-        : 'điểm danh vào';
-    final time = _formatVietnameseTime(record.timestamp);
-    return LocalNotificationService.showPlainNotification(
-      title: 'Thông báo điểm danh',
-      body: '${record.studentId} đã $action lúc $time.',
-    );
-  }
-
-  String _formatVietnameseTime(DateTime value) {
-    String twoDigits(int number) => number.toString().padLeft(2, '0');
-    return '${twoDigits(value.hour)}:${twoDigits(value.minute)} '
-        '${twoDigits(value.day)}/${twoDigits(value.month)}/${value.year}';
   }
 
   Future<void> _clearTokens() async {
