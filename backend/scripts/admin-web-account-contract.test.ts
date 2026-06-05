@@ -84,6 +84,10 @@ test('school payload trims id, code, website and education levels', () => {
     code: 'HNS2',
     status: 'active',
     website_url: 'https://hns.edu.vn/campus-2',
+    address: null,
+    phone: null,
+    email: null,
+    description: null,
     education_levels: ['primary', 'secondary'],
   });
 });

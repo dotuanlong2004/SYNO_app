@@ -2561,6 +2561,9 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 <p><strong>Số điện thoại:</strong> {provisionResult.data?.parent_phone || '-'}</p>
                 <p><strong>Mật khẩu:</strong> {provisionResult.data?.password}</p>
                 <p><strong>Mã HS:</strong> {provisionResult.data?.student_code}</p>
+                <p className="mt-2 text-green-700">
+                  Email và số điện thoại này là thông tin khôi phục khi phụ huynh quên mật khẩu.
+                </p>
               </div>
             ) : null}
           </section>
@@ -2596,8 +2599,7 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                   <thead>
                     <tr className="border-b text-slate-500">
                       <th className="py-2">Họ tên</th>
-                      <th className="py-2">Email</th>
-                      <th className="py-2">Số điện thoại</th>
+                      <th className="py-2">Liên hệ khôi phục</th>
                       <th className="py-2">Trạng thái</th>
                       <th className="py-2">Số học sinh liên kết</th>
                       <th className="py-2">Lần đăng nhập gần nhất</th>
@@ -2608,8 +2610,11 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     {parents.map((parent) => (
                       <tr key={parent.id} className="border-b">
                         <td className="py-2">{parent.full_name || '-'}</td>
-                        <td className="py-2">{parent.email}</td>
-                        <td className="py-2">{parent.phone || '-'}</td>
+                        <td className="py-2">
+                          <div className="font-medium text-slate-800">{parent.email || '-'}</div>
+                          <div className="text-xs text-slate-500">SĐT: {parent.phone || 'Chưa cập nhật'}</div>
+                          <div className="text-xs text-slate-400">Dùng để xác minh khi quên mật khẩu</div>
+                        </td>
                         <td className="py-2"><StatusBadge className={parent.is_active === false ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}>{parent.is_active === false ? 'Đã khóa' : 'Đang hoạt động'}</StatusBadge></td>
                         <td className="py-2">{parent.linked_students_count || (parent.student_code ? 1 : 0)}</td>
                         <td className="py-2">{formatDateTime(parent.last_sign_in_at)}</td>

@@ -31,6 +31,10 @@ type School = {
   code?: string | null;
   status: string;
   website_url?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  description?: string | null;
   education_levels?: string[];
   created_at?: string | null;
 };
@@ -63,6 +67,10 @@ const blankSchoolForm = {
   code: '',
   status: 'active',
   website_url: '',
+  address: '',
+  phone: '',
+  email: '',
+  description: '',
   education_levels: 'primary, secondary, high_school',
 };
 
@@ -355,6 +363,10 @@ function AppShell({
       code: school.code || '',
       status: school.status || 'active',
       website_url: school.website_url || '',
+      address: school.address || '',
+      phone: school.phone || '',
+      email: school.email || '',
+      description: school.description || '',
       education_levels: Array.isArray(school.education_levels) ? school.education_levels.join(', ') : '',
     });
     setSchoolModalOpen(true);
@@ -624,6 +636,20 @@ function AppShell({
             <Field label="Website">
               <input className="field-input" value={schoolForm.website_url} onChange={(event) => setSchoolForm((prev) => ({ ...prev, website_url: event.target.value }))} />
             </Field>
+            <Field label="Địa chỉ trường học">
+              <input className="field-input" value={schoolForm.address} onChange={(event) => setSchoolForm((prev) => ({ ...prev, address: event.target.value }))} />
+            </Field>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Số điện thoại liên hệ">
+                <input className="field-input" value={schoolForm.phone} onChange={(event) => setSchoolForm((prev) => ({ ...prev, phone: event.target.value }))} />
+              </Field>
+              <Field label="Email liên hệ">
+                <input className="field-input" value={schoolForm.email} onChange={(event) => setSchoolForm((prev) => ({ ...prev, email: event.target.value }))} />
+              </Field>
+            </div>
+            <Field label="Mô tả hiển thị trên app phụ huynh">
+              <textarea className="field-input min-h-24" value={schoolForm.description} onChange={(event) => setSchoolForm((prev) => ({ ...prev, description: event.target.value }))} />
+            </Field>
             <Field label="Cấp học">
               <input className="field-input" value={schoolForm.education_levels} onChange={(event) => setSchoolForm((prev) => ({ ...prev, education_levels: event.target.value }))} />
             </Field>
@@ -787,14 +813,18 @@ function SchoolsPage({
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <SectionHeader title="Danh sách trường học" actionLabel="Tạo trường học" onAction={onCreate} />
       <ModuleSearch value={search} onChange={onSearch} placeholder="Tìm theo tên trường học, mã trường, trạng thái..." count={schools.length} total={total} />
-      <DataTable headers={['Tên trường', 'Mã trường', 'Số tài khoản', 'Trạng thái', 'Ngày tạo', 'Thao tác']}>
+      <DataTable headers={['Tên trường', 'Mã trường', 'Liên hệ', 'Số tài khoản', 'Trạng thái', 'Ngày tạo', 'Thao tác']}>
         {schools.map((school) => (
           <tr key={school.id} className="border-b border-slate-100">
             <td className="py-3 pr-4">
               <div className="font-semibold">{school.name}</div>
-              <div className="text-xs text-slate-500">{school.id}</div>
+              <div className="text-xs text-slate-500">{school.address || school.id}</div>
             </td>
             <td className="py-3 pr-4">{school.code || '-'}</td>
+            <td className="py-3 pr-4">
+              <div>{school.phone || '-'}</div>
+              <div className="text-xs text-slate-500">{school.email || school.website_url || '-'}</div>
+            </td>
             <td className="py-3 pr-4">{schoolAccountCounts.get(school.id) || 0}</td>
             <td className="py-3 pr-4"><StatusBadge className={statusBadgeClass(school.status)} label={schoolStatusLabel(school.status)} /></td>
             <td className="py-3 pr-4">{formatDate(school.created_at)}</td>

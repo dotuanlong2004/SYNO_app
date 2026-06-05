@@ -3,9 +3,11 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_config.dart';
 import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/contact_info.dart';
 import '../../domain/entities/event_comment.dart';
 import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/school_event_item.dart';
+import '../../domain/entities/school_info.dart';
 
 class ParentFeaturesRemoteDataSource {
   ParentFeaturesRemoteDataSource({required Dio dio}) : _dio = dio;
@@ -13,6 +15,16 @@ class ParentFeaturesRemoteDataSource {
   final Dio _dio;
 
   int _parseInt(dynamic value) => int.tryParse('${value ?? ''}') ?? 0;
+
+  List<String> _parseStringList(dynamic value) {
+    if (value is List) {
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+    return const <String>[];
+  }
 
   String _backendAssetUrl(dynamic value) {
     final raw = '${value ?? ''}'.trim();
@@ -130,6 +142,91 @@ class ParentFeaturesRemoteDataSource {
       throw Exception(serverMsg ?? 'Không thể tải thông báo (${e.type.name})');
     } catch (e) {
       throw Exception('Lỗi khi tải thông báo: $e');
+    }
+  }
+
+  Future<SchoolInfo> fetchSchoolInfo() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/mobile/school-info',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final data = response.data?['data'];
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Phản hồi thông tin nhà trường không hợp lệ');
+      }
+      return SchoolInfo(
+        id: '${data['id'] ?? ''}',
+        name: '${data['name'] ?? ''}',
+        code: '${data['code'] ?? ''}',
+        websiteUrl: '${data['website_url'] ?? ''}',
+        address: '${data['address'] ?? ''}',
+        phone: '${data['phone'] ?? ''}',
+        email: '${data['email'] ?? ''}',
+        description: '${data['description'] ?? ''}',
+        educationLevels: _parseStringList(data['education_levels']),
+      );
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(
+        serverMsg ?? 'Không thể tải thông tin nhà trường (${e.type.name})',
+      );
+    } catch (e) {
+      throw Exception('Lỗi khi tải thông tin nhà trường: $e');
+    }
+  }
+
+  ContactInfo _parseContactInfo(Map<String, dynamic> json) {
+    return ContactInfo(
+      email: '${json['email'] ?? ''}',
+      phone: '${json['phone'] ?? ''}',
+      fullName: '${json['full_name'] ?? ''}',
+    );
+  }
+
+  Future<ContactInfo> fetchContactInfo() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/mobile/contact-info',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final data = response.data?['data'];
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Phản hồi thông tin liên hệ không hợp lệ');
+      }
+      return _parseContactInfo(data);
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(
+        serverMsg ?? 'Không thể tải thông tin liên hệ (${e.type.name})',
+      );
+    } catch (e) {
+      throw Exception('Lỗi khi tải thông tin liên hệ: $e');
+    }
+  }
+
+  Future<ContactInfo> updateContactInfo({
+    required String email,
+    required String phone,
+  }) async {
+    try {
+      final response = await _dio.put<Map<String, dynamic>>(
+        '/api/v1/mobile/contact-info',
+        data: {'email': email.trim(), 'phone': phone.trim()},
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final data = response.data?['data'];
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Phản hồi cập nhật liên hệ không hợp lệ');
+      }
+      return _parseContactInfo(data);
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error']?.toString();
+      throw Exception(
+        serverMsg ?? 'Không thể cập nhật thông tin liên hệ (${e.type.name})',
+      );
+    } catch (e) {
+      throw Exception('Lỗi khi cập nhật thông tin liên hệ: $e');
     }
   }
 

@@ -75,6 +75,20 @@ async function sendPushNotification(payload) {
       body: payload.body,
     },
     data: payload.data || {},
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'syno_channel',
+        sound: 'default',
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+        },
+      },
+    },
   };
 
   const response = await admin.messaging().send(message);

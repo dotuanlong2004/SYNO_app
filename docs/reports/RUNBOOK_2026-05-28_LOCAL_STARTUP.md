@@ -279,3 +279,7 @@ Invoke-RestMethod -Uri http://localhost:3000/api/v1/mobile/fees -Headers $header
 Invoke-RestMethod -Uri http://localhost:3000/api/v1/mobile/grades -Headers $headers
 Invoke-RestMethod -Uri http://localhost:3000/api/v1/mobile/announcements -Headers $headers
 ```
+Kết nối máy chấm công:
+chcp 65001
+
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File D:\attendance_app_dev\hardware-collector\ronald-jack-aix1\run-collector.ps1

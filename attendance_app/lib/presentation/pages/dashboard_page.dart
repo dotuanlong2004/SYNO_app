@@ -143,6 +143,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ),
         title: Text(titles[selectedIndex]),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Thông báo',
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () => _showNewsDialog(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               tooltip: 'Menu',
@@ -246,14 +251,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             onTap: () {
               Navigator.pop(context);
               _showFeesDialog(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.campaign_rounded),
-            title: const Text('Thông báo'),
-            onTap: () {
-              Navigator.pop(context);
-              _showNewsDialog(context);
             },
           ),
           ListTile(
@@ -500,19 +497,21 @@ class _OverviewTab extends ConsumerWidget {
                   const SizedBox(height: 14),
                   const Divider(color: Colors.white24, height: 1),
                   const SizedBox(height: 12),
-                  ...todayRecords.take(3).map(
-                    (r) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        'Đã điểm danh ${_attendanceTypeLabel(r).toLowerCase()} lúc ${_formatViTime(r.timestamp)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                  ...todayRecords
+                      .take(3)
+                      .map(
+                        (r) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'Đã điểm danh ${_attendanceTypeLabel(r).toLowerCase()} lúc ${_formatViTime(r.timestamp)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
                 ] else ...[
                   const SizedBox(height: 10),
                   const Text(
@@ -717,53 +716,6 @@ class _TodayRecordTile extends StatelessWidget {
   }
 }
 
-class _QuickActionChip extends StatelessWidget {
-  const _QuickActionChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE3EBF8)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: AppTheme.primaryColor, size: 20),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ── Card học sinh liên kết ────────────────────────────────────────────────
 class _LinkedStudentCard extends StatelessWidget {
   const _LinkedStudentCard({required this.student});
@@ -958,10 +910,7 @@ class _HistoryCard extends StatelessWidget {
                   '$localTime • $chipLabel',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                Text(
-                  statusLabel,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                Text(statusLabel, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
@@ -2056,9 +2005,9 @@ class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
       await ref.read(eventCommentsProvider(widget.item.id).future);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không thể gửi bình luận')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Không thể gửi bình luận')));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -2128,55 +2077,6 @@ class _EventDetailSheetState extends ConsumerState<_EventDetailSheet> {
               style: TextStyle(color: Colors.grey[500], fontSize: 12),
             ),
           ],
-
-          Row(
-            children: [
-              _QuickActionChip(
-                icon: Icons.receipt_long_rounded,
-                label: 'Học phí',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                      appBar: AppBar(title: const Text('Học phí')),
-                      backgroundColor: AppTheme.lightGrayBackground,
-                      body: const _FeesTab(),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _QuickActionChip(
-                icon: Icons.calendar_month_rounded,
-                label: 'Lịch học',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                      appBar: AppBar(title: const Text('Lịch học')),
-                      backgroundColor: AppTheme.lightGrayBackground,
-                      body: const _TimetableTab(),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _QuickActionChip(
-                icon: Icons.campaign_rounded,
-                label: 'Thông báo',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                      appBar: AppBar(title: const Text('Thông báo')),
-                      backgroundColor: AppTheme.lightGrayBackground,
-                      body: const _NewsTab(),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 18),
           const Divider(height: 24),
           Text(
@@ -2305,8 +2205,6 @@ class _NewsTab extends ConsumerStatefulWidget {
 }
 
 class _NewsTabState extends ConsumerState<_NewsTab> {
-  String _filter = 'Tất cả';
-
   IconData get _feedIcon => Icons.campaign_rounded;
 
   String get _emptyMessage => 'Chưa có thông báo mới.';
@@ -2342,18 +2240,6 @@ class _NewsTabState extends ConsumerState<_NewsTab> {
     final announcementsAsync = ref.watch(announcementsProvider);
     return announcementsAsync.when(
       data: (items) {
-        final visibleItems = items.where((item) {
-          final text = '${item.title} ${item.content}'.toLowerCase();
-          return switch (_filter) {
-            'Điểm danh' => text.contains('điểm danh'),
-            'Học phí' => text.contains('học phí') || text.contains('khoản thu'),
-            'Nhà trường' => !text.contains('điểm danh') &&
-                !text.contains('học phí') &&
-                !text.contains('khoản thu'),
-            _ => true,
-          };
-        }).toList();
-
         if (items.isEmpty) {
           return _EmptyState(icon: _feedIcon, message: _emptyMessage);
         }
@@ -2364,38 +2250,9 @@ class _NewsTabState extends ConsumerState<_NewsTab> {
           },
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, _listBottomPadding),
-            itemCount: visibleItems.isEmpty ? 2 : visibleItems.length + 1,
+            itemCount: items.length,
             itemBuilder: (context, index) {
-              if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: ['Tất cả', 'Điểm danh', 'Học phí', 'Nhà trường']
-                          .map(
-                            (label) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(label),
-                                selected: _filter == label,
-                                onSelected: (_) =>
-                                    setState(() => _filter = label),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                );
-              }
-              if (visibleItems.isEmpty) {
-                return const _EmptyState(
-                  icon: Icons.campaign_rounded,
-                  message: 'Chưa có thông báo mới.',
-                );
-              }
-              final item = visibleItems[index - 1];
+              final item = items[index];
               final isNew =
                   item.publishedAt != null &&
                   DateTime.now().difference(item.publishedAt!).inDays < 3;
@@ -2701,29 +2558,32 @@ class _GradesTabState extends ConsumerState<_GradesTab> {
       bySubject.putIfAbsent(key, () => <GradeRecord>[]).add(grade);
     }
 
-    return bySubject.values.map((rows) {
-      final semester1Rows = rows.where((grade) => _isSemester(grade, '1'));
-      final semester2Rows = rows.where((grade) => _isSemester(grade, '2'));
-      final semester1Average = semester1Rows.isEmpty
-          ? null
-          : semester1Rows.fold<double>(
-                  0,
-                  (sum, grade) => sum + grade.subjectAverage,
-                ) /
-                semester1Rows.length;
-      final semester2Average = semester2Rows.isEmpty
-          ? null
-          : semester2Rows.fold<double>(
-                  0,
-                  (sum, grade) => sum + grade.subjectAverage,
-                ) /
-                semester2Rows.length;
+    return bySubject.values
+        .map((rows) {
+          final semester1Rows = rows.where((grade) => _isSemester(grade, '1'));
+          final semester2Rows = rows.where((grade) => _isSemester(grade, '2'));
+          final semester1Average = semester1Rows.isEmpty
+              ? null
+              : semester1Rows.fold<double>(
+                      0,
+                      (sum, grade) => sum + grade.subjectAverage,
+                    ) /
+                    semester1Rows.length;
+          final semester2Average = semester2Rows.isEmpty
+              ? null
+              : semester2Rows.fold<double>(
+                      0,
+                      (sum, grade) => sum + grade.subjectAverage,
+                    ) /
+                    semester2Rows.length;
 
-      if (semester1Average != null && semester2Average != null) {
-        return (semester1Average + semester2Average * 2) / 3;
-      }
-      return semester1Average ?? semester2Average ?? 0;
-    }).where((score) => score > 0).toList();
+          if (semester1Average != null && semester2Average != null) {
+            return (semester1Average + semester2Average * 2) / 3;
+          }
+          return semester1Average ?? semester2Average ?? 0;
+        })
+        .where((score) => score > 0)
+        .toList();
   }
 
   double? _yearlyAverage(List<GradeRecord> grades) {
@@ -2733,8 +2593,9 @@ class _GradesTabState extends ConsumerState<_GradesTab> {
   }
 
   double _yearlyTotal(List<GradeRecord> grades) {
-    return _yearlySubjectAverages(grades)
-        .fold<double>(0, (sum, score) => sum + score);
+    return _yearlySubjectAverages(
+      grades,
+    ).fold<double>(0, (sum, score) => sum + score);
   }
 
   Widget _summaryCard({
@@ -3288,47 +3149,34 @@ class _ProfileTab extends ConsumerWidget {
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+          child: Consumer(
+            builder: (context, ref, _) {
+              final schoolAsync = ref.watch(schoolInfoProvider);
+              return schoolAsync.when(
+                loading: () => const SizedBox(
+                  height: 220,
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-              ),
-              const SizedBox(height: 20),
-              const Center(child: BrandLogo.horizontal(width: 220)),
-              const SizedBox(height: 20),
-              const Text(
-                'Thông tin nhà trường',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'SYNO đang kết nối dữ liệu điểm danh, lịch học, học phí và thông báo giữa nhà trường với phụ huynh.',
-                style: TextStyle(color: Colors.grey.shade700, height: 1.45),
-              ),
-              const SizedBox(height: 16),
-              _InfoRow(
-                icon: Icons.verified_user_rounded,
-                title: 'Dữ liệu theo trường',
-                subtitle:
-                    'Thông tin của phụ huynh và học sinh được tách theo trường.',
-              ),
-              const SizedBox(height: 10),
-              _InfoRow(
-                icon: Icons.support_agent_rounded,
-                title: 'Cần hỗ trợ?',
-                subtitle:
-                    'Liên hệ văn phòng nhà trường để cập nhật thông tin tài khoản.',
-              ),
-            ],
+                error: (_, _) => const _SchoolInfoSheetContent(
+                  schoolName: 'Thông tin nhà trường',
+                  description:
+                      'Thông tin nhà trường chưa được cập nhật. Vui lòng thử lại sau hoặc liên hệ văn phòng nhà trường.',
+                ),
+                data: (school) => _SchoolInfoSheetContent(
+                  schoolName: school.name.isNotEmpty
+                      ? school.name
+                      : 'Nhà trường',
+                  description: school.description.isNotEmpty
+                      ? school.description
+                      : 'SYNO là dịch vụ liên kết dữ liệu giữa nhà trường và phụ huynh, hỗ trợ theo dõi điểm danh, lịch học, học phí, thông báo và hoạt động của trường.',
+                  address: school.address,
+                  phone: school.phone,
+                  email: school.email,
+                  website: school.websiteUrl,
+                  code: school.code,
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -3566,6 +3414,105 @@ class _ProfileTab extends ConsumerWidget {
         ),
         const SizedBox(height: 32),
       ],
+    );
+  }
+}
+
+class _SchoolInfoSheetContent extends StatelessWidget {
+  const _SchoolInfoSheetContent({
+    required this.schoolName,
+    required this.description,
+    this.address = '',
+    this.phone = '',
+    this.email = '',
+    this.website = '',
+    this.code = '',
+  });
+
+  final String schoolName;
+  final String description;
+  final String address;
+  final String phone;
+  final String email;
+  final String website;
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final contactRows = <Widget>[
+      if (address.trim().isNotEmpty)
+        _InfoRow(
+          icon: Icons.location_on_rounded,
+          title: 'Địa chỉ',
+          subtitle: address.trim(),
+        ),
+      if (phone.trim().isNotEmpty)
+        _InfoRow(
+          icon: Icons.phone_rounded,
+          title: 'Số điện thoại',
+          subtitle: phone.trim(),
+        ),
+      if (email.trim().isNotEmpty)
+        _InfoRow(
+          icon: Icons.email_rounded,
+          title: 'Email',
+          subtitle: email.trim(),
+        ),
+      if (website.trim().isNotEmpty)
+        _InfoRow(
+          icon: Icons.language_rounded,
+          title: 'Website',
+          subtitle: website.trim(),
+        ),
+    ];
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Center(child: BrandLogo.horizontal(width: 220)),
+          const SizedBox(height: 20),
+          Text(
+            schoolName,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          ),
+          if (code.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Mã trường: ${code.trim()}',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            description,
+            style: TextStyle(color: Colors.grey.shade700, height: 1.45),
+          ),
+          const SizedBox(height: 16),
+          const _InfoRow(
+            icon: Icons.link_rounded,
+            title: 'Vai trò của SYNO',
+            subtitle:
+                'SYNO là dịch vụ liên kết dữ liệu giữa nhà trường và phụ huynh, không thay thế thông tin chính thức của nhà trường.',
+          ),
+          if (contactRows.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...contactRows.expand((row) => [row, const SizedBox(height: 10)]),
+          ],
+        ],
+      ),
     );
   }
 }

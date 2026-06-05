@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -13,17 +14,83 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _contactInitialized = false;
+  bool _savingContact = false;
   bool _changingPassword = false;
 
   @override
   void dispose() {
+    _emailController.dispose();
+    _phoneController.dispose();
     _oldPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  String _contactErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map) {
+        final errorText = data['error']?.toString().trim();
+        if (errorText != null && errorText.isNotEmpty) return errorText;
+      }
+    }
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    return raw.isEmpty ? 'Không thể cập nhật thông tin liên hệ.' : raw;
+  }
+
+  Future<void> _saveContactInfo() async {
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng nhập Gmail/email liên hệ.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gmail/email liên hệ không hợp lệ.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _savingContact = true);
+    try {
+      final dataSource = ref.read(parentFeaturesDataSourceProvider);
+      await dataSource.updateContactInfo(email: email, phone: phone);
+      ref.invalidate(contactInfoProvider);
+      await ref.read(authControllerProvider.notifier).refreshCurrentUser();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã cập nhật thông tin liên hệ.'),
+          backgroundColor: AppTheme.successColor,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_contactErrorMessage(error)),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _savingContact = false);
+    }
   }
 
   Future<void> _changePassword() async {
@@ -87,10 +154,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         throw Exception(response.data['error'] ?? 'Đổi mật khẩu thất bại');
       }
     } catch (e) {
+      var message = 'Đổi mật khẩu thất bại. Vui lòng thử lại.';
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map) {
+          final errorText = data['error']?.toString().trim();
+          if (errorText != null && errorText.isNotEmpty) {
+            message = errorText;
+          }
+        }
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đổi mật khẩu thất bại. Vui lòng thử lại.'),
+          SnackBar(
+            content: Text(message),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -134,6 +211,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
+    final contactAsync = ref.watch(contactInfoProvider);
     final userEmail = user?.email ?? 'Không có email';
     final userRole = user?.role ?? 'parent';
     final userName = user?.fullName ?? 'Người dùng';
@@ -199,6 +277,102 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     ],
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: contactAsync.when(
+                loading: () => const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Liên hệ tài khoản',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Không thể tải thông tin liên hệ. Vui lòng thử lại.',
+                      style: TextStyle(color: Colors.red.shade600),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => ref.invalidate(contactInfoProvider),
+                      child: const Text('Tải lại'),
+                    ),
+                  ],
+                ),
+                data: (contact) {
+                  if (!_contactInitialized) {
+                    _emailController.text = contact.email.isNotEmpty
+                        ? contact.email
+                        : userEmail;
+                    _phoneController.text = contact.phone;
+                    _contactInitialized = true;
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Liên hệ tài khoản',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Gmail/email và số điện thoại dùng để nhà trường liên hệ, xác minh khi quên mật khẩu.',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Gmail/email liên hệ',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Số điện thoại',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _savingContact ? null : _saveContactInfo,
+                          child: _savingContact
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Lưu thông tin liên hệ'),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),

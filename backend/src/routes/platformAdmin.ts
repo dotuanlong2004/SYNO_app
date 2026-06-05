@@ -101,7 +101,7 @@ async function listAuthUserSummaries(supabase) {
 router.get('/schools', async (req, res) => {
   const { data, error } = await getSupabase()
     .from('schools')
-    .select('id, name, code, status, website_url, education_levels, created_at, updated_at')
+    .select('id, name, code, status, website_url, address, phone, email, description, education_levels, created_at, updated_at')
     .order('created_at', { ascending: false });
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
@@ -119,7 +119,7 @@ router.post('/schools', async (req, res) => {
   const { data, error } = await getSupabase()
     .from('schools')
     .insert(buildSchoolPayload(schoolInput))
-    .select('id, name, code, status, website_url, education_levels, created_at, updated_at')
+    .select('id, name, code, status, website_url, address, phone, email, description, education_levels, created_at, updated_at')
     .single();
 
   if (error) {
@@ -156,11 +156,15 @@ router.put('/schools/:id', async (req, res) => {
       code: payload.code,
       status: payload.status,
       website_url: payload.website_url,
+      address: payload.address,
+      phone: payload.phone,
+      email: payload.email,
+      description: payload.description,
       education_levels: payload.education_levels,
       updated_at: new Date().toISOString(),
     })
     .eq('id', schoolId)
-    .select('id, name, code, status, website_url, education_levels, created_at, updated_at')
+    .select('id, name, code, status, website_url, address, phone, email, description, education_levels, created_at, updated_at')
     .single();
 
   if (error) return res.status(500).json({ ok: false, error: error.message });

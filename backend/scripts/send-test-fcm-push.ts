@@ -21,10 +21,30 @@ async function main() {
   const title = getArgValue('title') || undefined;
   const body = getArgValue('body') || undefined;
 
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+  let profileId = target.value;
+  if (target.column === 'email') {
+    const { data: usersPage, error: usersError } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (usersError) {
+      throw new Error(usersError.message || 'Failed to load auth users');
+    }
+
+    const authUser = usersPage.users.find(
+      (user) => String(user.email || '').trim().toLowerCase() === target.value,
+    );
+    if (!authUser) {
+      throw new Error(`No auth user found for email ${target.value}`);
+    }
+    profileId = authUser.id;
+  }
+
+  const { data, error } = await supabase
     .from('user_profiles')
-    .select('id, email, full_name, fcm_token')
-    .eq(target.column, target.value)
+    .select('id, full_name, fcm_token')
+    .eq('id', profileId)
     .maybeSingle();
 
   if (error) {
@@ -46,7 +66,7 @@ async function main() {
         ok: true,
         target: {
           id: profile.id,
-          email: profile.email,
+          email: target.column === 'email' ? target.value : undefined,
           full_name: profile.full_name || null,
         },
         firebase: result,

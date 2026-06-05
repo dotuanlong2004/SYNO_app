@@ -26,10 +26,12 @@ import '../../domain/auth/token_pair.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/announcement_item.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/contact_info.dart';
 import '../../domain/entities/event_comment.dart';
 import '../../domain/entities/fee_notice.dart';
 import '../../domain/entities/grade_record.dart';
 import '../../domain/entities/school_event_item.dart';
+import '../../domain/entities/school_info.dart';
 import '../../domain/entities/student_link_info.dart';
 import '../../domain/entities/timetable_entry.dart';
 import '../../domain/repositories/attendance_repository.dart';
@@ -176,6 +178,12 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState.authenticated(result.loginResult.user);
     _initializeFcm();
     return result;
+  }
+
+  Future<void> refreshCurrentUser() async {
+    final current = await ref.read(authApiProvider).currentUser();
+    await ref.read(tokenStorageProvider).saveUser(current);
+    state = AuthState.authenticated(current);
   }
 
   bool _isNetworkError(Object error) {
@@ -447,11 +455,24 @@ final eventsProvider = FutureProvider<List<SchoolEventItem>>((ref) async {
   return dataSource.fetchEvents();
 });
 
-final eventCommentsProvider =
-    FutureProvider.family<List<EventComment>, int>((ref, eventId) async {
-      final dataSource = ref.watch(parentFeaturesDataSourceProvider);
-      return dataSource.fetchEventComments(eventId);
-    });
+final schoolInfoProvider = FutureProvider<SchoolInfo>((ref) async {
+  ref.watch(parentLearningDataRefreshTickProvider);
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchSchoolInfo();
+});
+
+final contactInfoProvider = FutureProvider<ContactInfo>((ref) async {
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchContactInfo();
+});
+
+final eventCommentsProvider = FutureProvider.family<List<EventComment>, int>((
+  ref,
+  eventId,
+) async {
+  final dataSource = ref.watch(parentFeaturesDataSourceProvider);
+  return dataSource.fetchEventComments(eventId);
+});
 
 final chatMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
   final dataSource = ref.watch(parentFeaturesDataSourceProvider);

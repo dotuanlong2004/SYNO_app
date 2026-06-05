@@ -1,7 +1,7 @@
 export function roleLabel(role: string | null | undefined): string {
   switch (String(role || '').toLowerCase()) {
     case 'admin':
-      return 'Quản trị trường';
+      return 'Nhà trường';
     case 'teacher':
       return 'Giáo viên';
     default:
@@ -44,13 +44,15 @@ export function attendanceStatusLabel(status: string | null | undefined): string
     case 'on_time':
       return 'Đúng giờ';
     case 'late':
-      return 'Đi muộn';
+      return 'Muộn';
     case 'early':
       return 'Về sớm';
     case 'manual':
       return 'Thủ công';
+    case 'leave':
+      return 'Ra';
     default:
-      return status ? String(status) : 'Chưa phân loại';
+      return status ? 'Không xác định' : 'Không xác định';
   }
 }
 

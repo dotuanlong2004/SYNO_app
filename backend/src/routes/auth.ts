@@ -244,6 +244,60 @@ router.post('/refresh', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'Invalid refresh token' });
   }
 });
+
+router.post('/change-password', async (req, res) => {
+  const authHeader = String(req.headers.authorization || '');
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const oldPassword = String(req.body?.old_password ?? '');
+  const newPassword = String(req.body?.new_password ?? '');
+
+  if (!token) {
+    return res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập lại trước khi đổi mật khẩu.' });
+  }
+
+  if (!oldPassword) {
+    return res.status(400).json({ ok: false, error: 'Vui lòng nhập mật khẩu hiện tại.' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ ok: false, error: 'Mật khẩu mới tối thiểu 6 ký tự.' });
+  }
+
+  try {
+    const adminClient = getSupabase();
+    const { data: userData, error: userError } = await adminClient.auth.getUser(token);
+    const authUser = userData?.user;
+    if (userError || !authUser?.email) {
+      return res.status(401).json({ ok: false, error: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' });
+    }
+
+    const anonClient = getSupabaseAnon() || adminClient;
+    const { error: verifyError } = await anonClient.auth.signInWithPassword({
+      email: authUser.email,
+      password: oldPassword,
+    });
+    if (verifyError) {
+      return res.status(400).json({ ok: false, error: 'Mật khẩu hiện tại không đúng.' });
+    }
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(authUser.id, {
+      password: newPassword,
+      user_metadata: {
+        ...(authUser.user_metadata || {}),
+        must_change_password: false,
+      },
+    });
+    if (updateError) {
+      return res.status(400).json({ ok: false, error: updateError.message || 'Không thể đổi mật khẩu.' });
+    }
+
+    return res.status(200).json({ ok: true, message: 'Đổi mật khẩu thành công.' });
+  } catch (error) {
+    console.error('Change password failed', error);
+    return res.status(500).json({ ok: false, error: 'Không thể đổi mật khẩu. Vui lòng thử lại.' });
+  }
+});
+
 router.post('/logout', async (req, res) => {
   try {
     const supabase = getSupabaseAnon() || getSupabase();

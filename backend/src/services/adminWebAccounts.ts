@@ -17,6 +17,10 @@ type SchoolInput = {
   code?: string | null;
   status?: string;
   website_url?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  description?: string | null;
   education_levels?: string[] | string | null;
 };
 
@@ -95,6 +99,10 @@ export function validateSchoolInput(input: SchoolInput) {
   const code = String(input?.code || '').trim().toUpperCase();
   const status = String(input?.status || 'active').trim().toLowerCase();
   const websiteUrl = String(input?.website_url || '').trim();
+  const address = String(input?.address || '').trim();
+  const phone = String(input?.phone || '').trim();
+  const email = String(input?.email || '').trim();
+  const description = String(input?.description || '').trim();
 
   if (!id || !name) {
     throw new Error('id and name are required');
@@ -112,6 +120,10 @@ export function validateSchoolInput(input: SchoolInput) {
     code,
     status: status as 'active' | 'inactive' | 'suspended',
     website_url: websiteUrl,
+    address,
+    phone,
+    email,
+    description,
     education_levels: normalizeEducationLevels(input?.education_levels),
   };
 }
@@ -123,6 +135,10 @@ export function buildSchoolPayload(input: ReturnType<typeof validateSchoolInput>
     code: input.code || null,
     status: input.status,
     website_url: input.website_url || null,
+    address: input.address || null,
+    phone: input.phone || null,
+    email: input.email || null,
+    description: input.description || null,
     education_levels: input.education_levels,
   };
 }

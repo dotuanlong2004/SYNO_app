@@ -259,6 +259,114 @@ router.get('/announcements', mobileAuth, async (req, res) => {
   }
 });
 
+router.get('/school-info', mobileAuth, async (req, res) => {
+  const schoolId = String(req.user?.school_id ?? '1');
+  try {
+    const { data, error } = await getSupabase()
+      .from('schools')
+      .select('id, name, code, website_url, address, phone, email, description, education_levels')
+      .eq('id', schoolId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      return res.status(404).json({ ok: false, error: 'School was not found' });
+    }
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.error('Failed to fetch mobile school info', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
+router.get('/contact-info', mobileAuth, async (req, res) => {
+  const userId = String(req.user?.id || '');
+  try {
+    const supabase = getSupabase();
+    const { data: profile, error } = await supabase
+      .from('user_profiles')
+      .select('full_name, phone')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) throw error;
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        email: req.user?.email || '',
+        phone: profile?.phone || '',
+        full_name: profile?.full_name || req.user?.full_name || '',
+      },
+    });
+  } catch (error) {
+    console.error('Failed to fetch mobile contact info', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
+router.put('/contact-info', mobileAuth, async (req, res) => {
+  const userId = String(req.user?.id || '');
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const phone = String(req.body?.phone ?? '').trim();
+
+  if (!email) {
+    return res.status(400).json({ ok: false, error: 'Vui lòng nhập Gmail/email liên hệ.' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: 'Gmail/email liên hệ không hợp lệ.' });
+  }
+  if (phone && !/^[0-9+\-\s().]{8,20}$/.test(phone)) {
+    return res.status(400).json({ ok: false, error: 'Số điện thoại không hợp lệ.' });
+  }
+
+  try {
+    const supabase = getSupabase();
+    const currentEmail = String(req.user?.email || '').toLowerCase();
+    if (email !== currentEmail) {
+      const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
+        email,
+        email_confirm: true,
+        user_metadata: {
+          email,
+          phone,
+        },
+      });
+      if (authError) {
+        const message = authError.message?.includes('already')
+          ? 'Email này đã được tài khoản khác sử dụng.'
+          : authError.message || 'Không thể cập nhật email liên hệ.';
+        return res.status(400).json({ ok: false, error: message });
+      }
+    } else {
+      await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { phone },
+      });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .update({
+        phone,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+      .select('full_name, phone')
+      .single();
+    if (profileError) throw profileError;
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        email,
+        phone: profile?.phone || phone,
+        full_name: profile?.full_name || req.user?.full_name || '',
+      },
+    });
+  } catch (error) {
+    console.error('Failed to update mobile contact info', error);
+    return res.status(500).json({ ok: false, error: 'Không thể cập nhật thông tin liên hệ.' });
+  }
+});
+
 router.get('/events', mobileAuth, async (req, res) => {
   const schoolId = String(req.user?.school_id ?? '1');
   try {
