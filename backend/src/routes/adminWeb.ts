@@ -25,6 +25,7 @@ const {
   findChatStudentByCode,
 } = require('../services/adminWebChatMessages');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
+const { validateSimulatedPayment } = require('../services/paymentQr');
 const { buildGradePayload } = require('../services/adminWebGrades');
 const { buildStudentBulkPayload, buildStudentPayload } = require('../services/adminWebStudents');
 const { buildTimetablePayload } = require('../services/adminWebTimetables');
@@ -992,6 +993,67 @@ router.put('/fees/:id', async (req, res) => {
     return res.status(500).json({ ok: false, error: error.message });
   }
   return res.json({ ok: true, data });
+});
+
+// POST /admin-web/fees/:id/simulate-payment
+// Test-only helper: marks a fee as paid after staff confirms the exact received amount.
+// Real bank integration must replace this with a signed bank webhook/reconciliation flow.
+router.post('/fees/:id/simulate-payment', async (req, res) => {
+  const supabase = getSupabase();
+  const feeId = Number(req.params.id);
+  if (!Number.isInteger(feeId) || feeId <= 0) {
+    return res.status(400).json({ ok: false, error: 'fee id is invalid' });
+  }
+
+  const { data: fee, error: loadError } = await supabase
+    .from('fee_notices')
+    .select('id, total_amount, payment_status')
+    .eq('id', feeId)
+    .eq('school_id', req.schoolId)
+    .maybeSingle();
+
+  if (loadError) {
+    return res.status(500).json({ ok: false, error: loadError.message });
+  }
+  if (!fee) {
+    return res.status(404).json({ ok: false, error: 'Không tìm thấy khoản thu.' });
+  }
+  if (fee.payment_status === 'paid') {
+    return res.status(400).json({ ok: false, error: 'Khoản thu đã được ghi nhận thanh toán.' });
+  }
+
+  try {
+    validateSimulatedPayment({
+      expectedAmount: fee.total_amount,
+      receivedAmount: req.body?.received_amount,
+    });
+  } catch (paymentError) {
+    return res.status(400).json({ ok: false, error: paymentError.message });
+  }
+
+  const { data, error } = await supabase
+    .from('fee_notices')
+    .update({
+      payment_status: 'paid',
+      payment_method: 'online',
+      paid_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', feeId)
+    .eq('school_id', req.schoolId)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+
+  return res.json({
+    ok: true,
+    data,
+    mode: 'simulation',
+    warning: 'Đây là xác nhận giả lập để kiểm thử. Không dùng thay thế đối soát ngân hàng thật.',
+  });
 });
 
 // DELETE /admin-web/fees/:id

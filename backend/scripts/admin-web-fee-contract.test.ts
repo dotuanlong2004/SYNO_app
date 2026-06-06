@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { buildFeeNoticePayload, normalizeFeeStatus, normalizePaymentMethod, normalizeTotalAmount } from '../src/services/adminWebFeeNotices';
+import { buildFeePaymentQr, validateSimulatedPayment } from '../src/services/paymentQr';
 
 function test(name: string, fn: () => void) {
   try {
@@ -69,4 +70,26 @@ test('normalizeTotalAmount accepts finite non-negative amounts', () => {
 test('normalizeTotalAmount rejects invalid or negative amounts', () => {
   assert.throws(() => normalizeTotalAmount('abc'), /total_amount must be a non-negative number/);
   assert.throws(() => normalizeTotalAmount(-1), /total_amount must be a non-negative number/);
+});
+
+test('buildFeePaymentQr creates deterministic transfer content without changing payment status', () => {
+  const qr = buildFeePaymentQr({
+    feeId: 4,
+    studentCode: 'HS0085',
+    amount: 2200000,
+  });
+
+  assert.equal(qr.amount, 2200000);
+  assert.equal(qr.add_info, 'SYNO HS0085 HP4');
+});
+
+test('validateSimulatedPayment requires exact amount match', () => {
+  assert.deepEqual(
+    validateSimulatedPayment({ expectedAmount: 2200000, receivedAmount: '2200000' }),
+    { expected: 2200000, received: 2200000 },
+  );
+  assert.throws(
+    () => validateSimulatedPayment({ expectedAmount: 2200000, receivedAmount: '2199000' }),
+    /Số tiền nhận được không khớp/,
+  );
 });

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../core/notifications/local_notification_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/datasources/fees_remote_data_source.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/fee_notice.dart';
@@ -1642,12 +1644,12 @@ double _parseMoneyValue(dynamic value) {
   return double.tryParse('${value ?? ''}') ?? 0;
 }
 
-class _FeeNoticeCard extends StatelessWidget {
+class _FeeNoticeCard extends ConsumerWidget {
   const _FeeNoticeCard({required this.fee});
   final FeeNotice fee;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isPaid = fee.paymentStatus == 'paid';
     final isPartial = fee.paymentStatus == 'partial';
     final statusText = isPaid
@@ -1825,8 +1827,304 @@ class _FeeNoticeCard extends StatelessWidget {
               ],
             ),
           ),
+          if (!isPaid) ...[
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _showPaymentQrSheet(context, ref, fee),
+                  icon: const Icon(Icons.qr_code_rounded, size: 20),
+                  label: const Text('Quét QR chuyển khoản'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+Future<void> _showPaymentQrSheet(
+  BuildContext context,
+  WidgetRef ref,
+  FeeNotice fee,
+) async {
+  final formatter = NumberFormat('#,###', 'vi');
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      return FutureBuilder<FeePaymentQrInfo>(
+        future: ref.read(feesDataSourceProvider).fetchPaymentQr(fee.id),
+        builder: (context, snapshot) {
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 28, 20, 28 + bottomInset),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: AppTheme.primaryOrange),
+                  SizedBox(height: 14),
+                  Text('Đang tạo mã QR chuyển khoản...'),
+                ],
+              ),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 24, 20, 28 + bottomInset),
+              child: _PaymentSheetMessage(
+                icon: Icons.error_outline_rounded,
+                title: 'Không thể tạo mã QR',
+                message:
+                    'Vui lòng thử lại hoặc liên hệ nhà trường để kiểm tra khoản thu.',
+              ),
+            );
+          }
+
+          final info = snapshot.data;
+          if (info == null || !info.configured || info.qrUrl == null) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 24, 20, 28 + bottomInset),
+              child: _PaymentSheetMessage(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Chưa cấu hình tài khoản nhận tiền',
+                message:
+                    info?.message ??
+                    'Nhà trường chưa cấu hình tài khoản nhận chuyển khoản.',
+              ),
+            );
+          }
+
+          return SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottomInset),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Chuyển khoản học phí',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF101828),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Quét mã QR và chuyển đúng số tiền, đúng nội dung để nhà trường đối soát.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF667085)),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Container(
+                      width: 240,
+                      height: 240,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Image.network(
+                        info.qrUrl!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: Color(0xFF94A3B8),
+                                size: 40,
+                              ),
+                            ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _PaymentInfoRow(
+                    label: 'Số tiền',
+                    value: '${formatter.format(info.amount)} đ',
+                    strong: true,
+                  ),
+                  _PaymentInfoRow(
+                    label: 'Tên tài khoản',
+                    value: info.accountName ?? '-',
+                  ),
+                  _PaymentInfoRow(
+                    label: 'Số tài khoản',
+                    value: info.accountNo ?? '-',
+                  ),
+                  _PaymentInfoRow(
+                    label: 'Nội dung',
+                    value: info.addInfo,
+                    trailing: IconButton(
+                      tooltip: 'Sao chép nội dung',
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: info.addInfo),
+                        );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đã sao chép nội dung chuyển khoản.'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFED7AA)),
+                    ),
+                    child: const Text(
+                      'SYNO không tự đánh dấu đã thanh toán chỉ vì phụ huynh mở mã QR. Trạng thái chỉ cập nhật sau khi nhà trường hoặc ngân hàng xác nhận giao dịch.',
+                      style: TextStyle(
+                        color: Color(0xFF9A3412),
+                        fontSize: 12,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+class _PaymentInfoRow extends StatelessWidget {
+  const _PaymentInfoRow({
+    required this.label,
+    required this.value,
+    this.trailing,
+    this.strong = false,
+  });
+
+  final String label;
+  final String value;
+  final Widget? trailing;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: strong ? 17 : 14,
+                color: const Color(0xFF0F172A),
+                fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentSheetMessage extends StatelessWidget {
+  const _PaymentSheetMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: const BoxDecoration(
+            color: Color(0xFFEFF6FF),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: AppTheme.primaryColor, size: 28),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Color(0xFF667085), height: 1.45),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đã hiểu'),
+          ),
+        ),
+      ],
     );
   }
 }

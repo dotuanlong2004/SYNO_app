@@ -7,6 +7,7 @@
 const express = require('express');
 const { getSupabase } = require('../config/supabase');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const { buildFeePaymentQr } = require('../services/paymentQr');
 const {
   attachStudentCodesToChatMessages,
   findChatStudentByCode,
@@ -221,6 +222,57 @@ router.get('/fees', mobileAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to fetch fee notices', error);
+    return res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+});
+
+router.get('/fees/:id/payment-qr', mobileAuth, async (req, res) => {
+  const schoolId = String(req.user?.school_id ?? '1');
+  const userRole = String(req.user?.role ?? '').toLowerCase();
+  const studentCode = String(req.user?.student_code ?? '').trim();
+  const feeId = Number(req.params.id);
+
+  if (!Number.isInteger(feeId) || feeId <= 0) {
+    return res.status(400).json({ ok: false, error: 'fee id is invalid' });
+  }
+
+  try {
+    let query = getSupabase()
+      .from('fee_notices')
+      .select('id, student_code, total_amount, payment_status')
+      .eq('id', feeId)
+      .eq('school_id', schoolId)
+      .maybeSingle();
+
+    const { data: fee, error } = await query;
+    if (error) throw error;
+    if (!fee) {
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy khoản thu.' });
+    }
+    if (userRole === 'parent') {
+      if (!studentCode) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Tài khoản phụ huynh chưa liên kết học sinh.',
+        });
+      }
+      if (fee.student_code !== studentCode) {
+        return res.status(403).json({ ok: false, error: 'Bạn không có quyền xem khoản thu này.' });
+      }
+    }
+    if (fee.payment_status === 'paid') {
+      return res.status(400).json({ ok: false, error: 'Khoản thu này đã được ghi nhận thanh toán.' });
+    }
+
+    const payment = buildFeePaymentQr({
+      feeId: fee.id,
+      studentCode: fee.student_code,
+      amount: fee.total_amount,
+    });
+
+    return res.status(200).json({ ok: true, data: payment });
+  } catch (error) {
+    console.error('Failed to build fee payment QR', error);
     return res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 });

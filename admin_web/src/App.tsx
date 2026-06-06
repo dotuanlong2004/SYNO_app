@@ -1917,6 +1917,36 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     }
   }
 
+  async function simulateFeePayment(item) {
+    const amount = Number(item?.total_amount || 0);
+    if (!item?.id || !Number.isFinite(amount) || amount <= 0) {
+      setMessage('Khoản thu không hợp lệ để giả lập thanh toán.');
+      return;
+    }
+    if (String(item.payment_status || '').toLowerCase() === 'paid') {
+      setMessage('Khoản thu này đã được ghi nhận thanh toán.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Giả lập nhà trường đã nhận chuyển khoản ${formatCurrency(amount)} cho ${item.student_code}? ` +
+      'Chức năng này chỉ dùng để kiểm thử, không thay thế đối soát ngân hàng thật.',
+    );
+    if (!confirmed) return;
+    setMessage('');
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/fees/${item.id}/simulate-payment`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({ received_amount: amount }),
+      });
+      setMessage(json.warning || 'Đã giả lập nhận chuyển khoản thành công.');
+      setSelectedFee(json.data || null);
+      await loadFees();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   async function createAnnouncement(event) {
     event.preventDefault();
     setMessage('');
@@ -3141,6 +3171,22 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                     <span>Khoản thu chính: {mapEntries(f.subject_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
                     <span>Khoản khác: {mapEntries(f.other_fees).map(([label, amount]) => `${label}: ${formatLooseCurrency(amount)}`).join(', ') || '-'}</span>
                   </div>
+                  {String(f.payment_status || '').toLowerCase() !== 'paid' ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      <span className="font-semibold">Ki&#7875;m th&#7917; thanh to&#225;n:</span>
+                      <span>Ch&#7881; d&#249;ng &#273;&#7875; gi&#7843; l&#7853;p nh&#224; tr&#432;&#7901;ng &#273;&#227; nh&#7853;n &#273;&#250;ng s&#7889; ti&#7873;n chuy&#7875;n kho&#7843;n.</span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          simulateFeePayment(f);
+                        }}
+                        className="rounded bg-emerald-600 px-3 py-1.5 font-semibold text-white"
+                      >
+                        Gi&#7843; l&#7853;p nh&#7853;n ti&#7873;n
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

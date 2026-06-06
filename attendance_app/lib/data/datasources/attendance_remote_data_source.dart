@@ -10,7 +10,7 @@ class AttendanceRemoteDataSource {
   Future<List<AttendanceRecordModel>> fetchAttendanceHistory() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/attendance',
+        '/api/v1/mobile/attendance/logs',
         queryParameters: const {'limit': 100},
       );
 
