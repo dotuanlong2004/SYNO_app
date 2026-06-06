@@ -4,11 +4,19 @@ type FeePaymentQrInput = {
   feeId: number | string;
   studentCode: string;
   amount: number;
+  paymentConfig?: PaymentConfigInput | null;
 };
 
 type SimulatePaymentInput = {
   expectedAmount: unknown;
   receivedAmount: unknown;
+};
+
+type PaymentConfigInput = {
+  bankBin?: unknown;
+  accountNo?: unknown;
+  accountName?: unknown;
+  enabled?: unknown;
 };
 
 function normalizeAmount(value: unknown): number {
@@ -19,17 +27,30 @@ function normalizeAmount(value: unknown): number {
   return Math.round(amount);
 }
 
-function getPaymentConfig() {
-  const bankBin = String(process.env.SYNO_PAYMENT_BANK_BIN || '').trim();
-  const accountNo = String(process.env.SYNO_PAYMENT_ACCOUNT_NO || '').trim();
-  const accountName = String(process.env.SYNO_PAYMENT_ACCOUNT_NAME || '').trim();
+function normalizeConfig(config: PaymentConfigInput) {
+  const bankBin = String(config.bankBin || '').trim();
+  const accountNo = String(config.accountNo || '').trim();
+  const accountName = String(config.accountName || '').trim();
+  const enabled = config.enabled !== false;
 
   return {
     bankBin,
     accountNo,
     accountName,
-    configured: Boolean(bankBin && accountNo && accountName),
+    configured: Boolean(enabled && bankBin && accountNo && accountName),
   };
+}
+
+function getPaymentConfig(config?: PaymentConfigInput | null) {
+  if (config) {
+    return normalizeConfig(config);
+  }
+
+  const bankBin = String(process.env.SYNO_PAYMENT_BANK_BIN || '').trim();
+  const accountNo = String(process.env.SYNO_PAYMENT_ACCOUNT_NO || '').trim();
+  const accountName = String(process.env.SYNO_PAYMENT_ACCOUNT_NAME || '').trim();
+
+  return normalizeConfig({ bankBin, accountNo, accountName, enabled: true });
 }
 
 function buildTransferContent({ feeId, studentCode }: Pick<FeePaymentQrInput, 'feeId' | 'studentCode'>) {
@@ -40,7 +61,7 @@ function buildTransferContent({ feeId, studentCode }: Pick<FeePaymentQrInput, 'f
 
 export function buildFeePaymentQr(input: FeePaymentQrInput) {
   const amount = normalizeAmount(input.amount);
-  const config = getPaymentConfig();
+  const config = getPaymentConfig(input.paymentConfig);
   const addInfo = buildTransferContent(input);
 
   if (!config.configured) {
@@ -78,4 +99,3 @@ export function validateSimulatedPayment({ expectedAmount, receivedAmount }: Sim
   }
   return { expected, received };
 }
-

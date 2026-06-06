@@ -12,7 +12,36 @@ Tai lieu nay ghi cach chay luong thanh toan hoc phi bang QR trong ban hien tai.
 - Khi chay that, trang thai thanh toan chi duoc cap nhat sau khi ngan hang hoac nhan vien nha truong doi soat thanh cong.
 - Noi dung chuyen khoan phai giu dung mau: `SYNO {ma_hoc_sinh} HP{fee_id}`.
 
-## Cau hinh tai khoan nhan tien
+## Cau hinh tai khoan nhan tien tren Web Admin
+
+Day la cach cau hinh chinh cho nha truong:
+
+1. Mo Web Admin nha truong:
+
+```text
+http://127.0.0.1:5173
+```
+
+2. Dang nhap bang tai khoan admin truong.
+3. Chon menu ben trai: `Cai dat truong`.
+4. Dien cac truong:
+
+- `Ma ngan hang`: ma BIN ngan hang dung cho VietQR.
+- `So tai khoan`: so tai khoan nhan tien cua nha truong.
+- `Ten chu tai khoan`: ten chu tai khoan hien tren QR.
+- Bat `Cho phep phu huynh quet QR chuyen khoan hoc phi`.
+
+5. Bam `Luu tai khoan nhan tien`.
+
+Sau khi luu thanh cong, app phu huynh mo khoan hoc phi se co the hien QR chuyen khoan. Neu chua cau hinh day du, app se hien thong bao:
+
+```text
+Nha truong chua cau hinh tai khoan nhan chuyen khoan.
+```
+
+Luu y: QR chi la huong dan chuyen khoan. Trang thai `Da thanh toan` chi duoc cap nhat sau khi nha truong doi soat hoac khi he thong ngan hang that gui xac nhan hop le.
+
+## Cau hinh fallback bang backend.env
 
 Them cac bien sau vao `backend/.env`, sau do restart backend:
 
@@ -28,11 +57,7 @@ Y nghia:
 - `SYNO_PAYMENT_ACCOUNT_NO`: so tai khoan nhan tien cua nha truong.
 - `SYNO_PAYMENT_ACCOUNT_NAME`: ten chu tai khoan.
 
-Neu thieu mot trong cac bien tren, app se hien thong bao:
-
-```text
-Nha truong chua cau hinh tai khoan nhan chuyen khoan.
-```
+Day chi la fallback cho moi truong dev/noi bo. Khi nha truong cau hinh trong Web Admin, backend se uu tien cau hinh theo tung truong.
 
 ## API app phu huynh
 

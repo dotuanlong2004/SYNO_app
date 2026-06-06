@@ -239,7 +239,7 @@ router.get('/fees/:id/payment-qr', mobileAuth, async (req, res) => {
   try {
     let query = getSupabase()
       .from('fee_notices')
-      .select('id, student_code, total_amount, payment_status')
+      .select('id, student_code, total_amount, payment_status, school_id')
       .eq('id', feeId)
       .eq('school_id', schoolId)
       .maybeSingle();
@@ -264,10 +264,30 @@ router.get('/fees/:id/payment-qr', mobileAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Khoản thu này đã được ghi nhận thanh toán.' });
     }
 
+    const { data: school, error: schoolError } = await getSupabase()
+      .from('schools')
+      .select('payment_bank_bin, payment_account_no, payment_account_name, payment_qr_enabled')
+      .eq('id', fee.school_id)
+      .maybeSingle();
+
+    if (schoolError && schoolError.code !== '42703') {
+      throw schoolError;
+    }
+
+    const paymentConfig = school
+      ? {
+          bankBin: school.payment_bank_bin,
+          accountNo: school.payment_account_no,
+          accountName: school.payment_account_name,
+          enabled: school.payment_qr_enabled,
+        }
+      : null;
+
     const payment = buildFeePaymentQr({
       feeId: fee.id,
       studentCode: fee.student_code,
       amount: fee.total_amount,
+      paymentConfig,
     });
 
     return res.status(200).json({ ok: true, data: payment });

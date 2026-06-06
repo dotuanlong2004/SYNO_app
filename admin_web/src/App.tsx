@@ -447,6 +447,13 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
     message_text: '',
   });
   const [systemHealth, setSystemHealth] = useState(null);
+  const [paymentSettings, setPaymentSettings] = useState({
+    payment_bank_bin: '',
+    payment_account_no: '',
+    payment_account_name: '',
+    payment_qr_enabled: false,
+  });
+  const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(false);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [attendanceFilters, setAttendanceFilters] = useState({
     student_code: '',
@@ -526,9 +533,10 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       requestJson(`${ADMIN_WEB_API}/grades`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/chat/messages`, { headers: adminHeaders }),
       requestJson(`${ADMIN_WEB_API}/parents`, { headers: adminHeaders }),
-      requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders })
+      requestJson(`${ADMIN_WEB_API}/attendance-logs`, { headers: adminHeaders }),
+      requestJson(`${ADMIN_WEB_API}/payment-settings`, { headers: adminHeaders })
     ])
-      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, eventsJson, gradesJson, chatJson, parentsJson, attendanceJson]) => {
+      .then(([studentsJson, timetablesJson, feesJson, announcementsJson, eventsJson, gradesJson, chatJson, parentsJson, attendanceJson, paymentSettingsJson]) => {
         setStudents(studentsJson.data || []);
         setTimetables(timetablesJson.data || []);
         setFees(feesJson.data || []);
@@ -538,6 +546,12 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
         setChatMessages(chatJson.data || []);
         setParents(parentsJson.data || []);
         setAttendanceLogs(attendanceJson.data || []);
+        setPaymentSettings({
+          payment_bank_bin: paymentSettingsJson.data?.payment_bank_bin || '',
+          payment_account_no: paymentSettingsJson.data?.payment_account_no || '',
+          payment_account_name: paymentSettingsJson.data?.payment_account_name || '',
+          payment_qr_enabled: paymentSettingsJson.data?.payment_qr_enabled === true,
+        });
         loadSystemHealth().catch(() => {});
       })
       .catch((error) => {
@@ -667,6 +681,46 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
       setFees(json.data || []);
     } catch (error) {
       setMessage(error.message);
+    }
+  }
+
+  async function loadPaymentSettings() {
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/payment-settings`, {
+        headers: adminHeaders,
+      });
+      setPaymentSettings({
+        payment_bank_bin: json.data?.payment_bank_bin || '',
+        payment_account_no: json.data?.payment_account_no || '',
+        payment_account_name: json.data?.payment_account_name || '',
+        payment_qr_enabled: json.data?.payment_qr_enabled === true,
+      });
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function savePaymentSettings(event) {
+    event.preventDefault();
+    setMessage('');
+    setPaymentSettingsLoading(true);
+    try {
+      const json = await requestJson(`${ADMIN_WEB_API}/payment-settings`, {
+        method: 'PUT',
+        headers: adminHeaders,
+        body: JSON.stringify(paymentSettings),
+      });
+      setPaymentSettings({
+        payment_bank_bin: json.data?.payment_bank_bin || '',
+        payment_account_no: json.data?.payment_account_no || '',
+        payment_account_name: json.data?.payment_account_name || '',
+        payment_qr_enabled: json.data?.payment_qr_enabled === true,
+      });
+      setMessage('Đã lưu tài khoản nhận chuyển khoản của nhà trường.');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setPaymentSettingsLoading(false);
     }
   }
 
@@ -3977,6 +4031,81 @@ function AppShell({ authToken, authUser, onLogout, onSessionRefresh }) {
                 <div className="mt-2 text-sm font-semibold">Mở trạng thái hệ thống và kết nối dữ liệu</div>
               </button>
             </div>
+            <form data-testid="payment-settings-form" onSubmit={savePaymentSettings} className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-slate-950">Tài khoản nhận chuyển khoản</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Cấu hình tài khoản ngân hàng để phụ huynh quét QR thanh toán học phí trong app.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={paymentSettings.payment_qr_enabled}
+                    onChange={(event) =>
+                      setPaymentSettings((prev) => ({ ...prev, payment_qr_enabled: event.target.checked }))
+                    }
+                  />
+                  Bật QR chuyển khoản
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <FieldLabel>Mã ngân hàng</FieldLabel>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="VD: 970436"
+                    value={paymentSettings.payment_bank_bin}
+                    onChange={(event) =>
+                      setPaymentSettings((prev) => ({ ...prev, payment_bank_bin: event.target.value }))
+                    }
+                  />
+                  <p className="mt-1 text-xs text-slate-500">Dùng mã BIN ngân hàng để tạo VietQR.</p>
+                </div>
+                <div>
+                  <FieldLabel>Số tài khoản</FieldLabel>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Nhập số tài khoản nhận tiền"
+                    value={paymentSettings.payment_account_no}
+                    onChange={(event) =>
+                      setPaymentSettings((prev) => ({ ...prev, payment_account_no: event.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Tên chủ tài khoản</FieldLabel>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="VD: TRUONG HUU NGHI"
+                    value={paymentSettings.payment_account_name}
+                    onChange={(event) =>
+                      setPaymentSettings((prev) => ({ ...prev, payment_account_name: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                QR chỉ tạo hướng dẫn chuyển khoản. Trạng thái học phí chỉ được ghi nhận sau khi nhà trường hoặc ngân hàng đối soát giao dịch thật.
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={paymentSettingsLoading}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                >
+                  {paymentSettingsLoading ? 'Đang lưu...' : 'Lưu tài khoản nhận tiền'}
+                </button>
+                <button
+                  type="button"
+                  onClick={loadPaymentSettings}
+                  className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Tải lại cấu hình
+                </button>
+              </div>
+            </form>
           </section>
         ) : null}
 

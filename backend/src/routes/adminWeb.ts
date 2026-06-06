@@ -26,6 +26,10 @@ const {
 } = require('../services/adminWebChatMessages');
 const { buildFeeNoticePayload } = require('../services/adminWebFeeNotices');
 const { validateSimulatedPayment } = require('../services/paymentQr');
+const {
+  normalizeSchoolPaymentSettings,
+  publicSchoolPaymentSettings,
+} = require('../services/schoolPaymentSettings');
 const { buildGradePayload } = require('../services/adminWebGrades');
 const { buildStudentBulkPayload, buildStudentPayload } = require('../services/adminWebStudents');
 const { buildTimetablePayload } = require('../services/adminWebTimetables');
@@ -113,6 +117,52 @@ function setSchoolId(req, res, next) {
 }
 
 router.use(mobileAuth, requireAdminWebRole, setSchoolId);
+
+// GET /admin-web/payment-settings
+router.get('/payment-settings', async (req, res) => {
+  const { data, error } = await getSupabase()
+    .from('schools')
+    .select('id, payment_bank_bin, payment_account_no, payment_account_name, payment_qr_enabled')
+    .eq('id', req.schoolId)
+    .maybeSingle();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+
+  return res.json({ ok: true, data: publicSchoolPaymentSettings(data) });
+});
+
+// PUT /admin-web/payment-settings
+router.put('/payment-settings', async (req, res) => {
+  const role = String(req.user?.role || '').toLowerCase();
+  if (role !== 'admin') {
+    return res.status(403).json({
+      ok: false,
+      error: 'Chỉ tài khoản quản trị nhà trường được sửa tài khoản nhận chuyển khoản.',
+    });
+  }
+
+  let payload;
+  try {
+    payload = normalizeSchoolPaymentSettings(req.body || {});
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message });
+  }
+
+  const { data, error } = await getSupabase()
+    .from('schools')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', req.schoolId)
+    .select('id, payment_bank_bin, payment_account_no, payment_account_name, payment_qr_enabled')
+    .single();
+
+  if (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+
+  return res.json({ ok: true, data: publicSchoolPaymentSettings(data) });
+});
 
 // GET /admin-web/students
 router.get('/students', async (req, res) => {

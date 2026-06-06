@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { buildFeeNoticePayload, normalizeFeeStatus, normalizePaymentMethod, normalizeTotalAmount } from '../src/services/adminWebFeeNotices';
 import { buildFeePaymentQr, validateSimulatedPayment } from '../src/services/paymentQr';
+import { normalizeSchoolPaymentSettings, publicSchoolPaymentSettings } from '../src/services/schoolPaymentSettings';
 
 function test(name: string, fn: () => void) {
   try {
@@ -92,4 +93,24 @@ test('validateSimulatedPayment requires exact amount match', () => {
     () => validateSimulatedPayment({ expectedAmount: 2200000, receivedAmount: '2199000' }),
     /Số tiền nhận được không khớp/,
   );
+});
+
+test('school payment settings require complete bank details before enabling QR', () => {
+  assert.throws(
+    () => normalizeSchoolPaymentSettings({ payment_qr_enabled: true, payment_bank_bin: '970436' }),
+    /nhập đủ/,
+  );
+  const settings = normalizeSchoolPaymentSettings({
+    payment_qr_enabled: true,
+    payment_bank_bin: '970436',
+    payment_account_no: ' 123456789 ',
+    payment_account_name: 'TRUONG HUU NGHI',
+  });
+  assert.deepEqual(settings, {
+    payment_qr_enabled: true,
+    payment_bank_bin: '970436',
+    payment_account_no: '123456789',
+    payment_account_name: 'TRUONG HUU NGHI',
+  });
+  assert.equal(publicSchoolPaymentSettings(settings).configured, true);
 });
