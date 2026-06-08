@@ -653,3 +653,12 @@ be7001aa feat: polish parent app brand text
 ```text
 attendance_app/lib/presentation/pages/dashboard_page.dart
 ```
+
+---
+
+## 28) Quy tắc tiếng Việt có dấu cho tài liệu và bộ nhớ (June 8, 2026)
+
+- User directive: luôn ghi tiếng Việt có dấu đầy đủ trong mọi tài liệu, handoff, runbook, báo cáo, bộ nhớ dự án và nội dung UI/user-facing mới.
+- Không viết tiếng Việt không dấu trong file `.md` mới hoặc nội dung hướng dẫn mới, trừ khi đang trích nguyên văn lệnh, biến môi trường, đường dẫn, log, mã lỗi, tên file, tên branch, commit hash hoặc text kỹ thuật bắt buộc giữ nguyên.
+- Trước khi commit tài liệu hoặc UI text, kiểm tra nhanh để tránh để sót câu tiếng Việt không dấu.
+- Nếu file cũ đang bị lỗi mã hóa hoặc có nội dung không dấu, không tự sửa toàn bộ file nếu không liên quan task; nhưng mọi phần thêm mới phải dùng UTF-8 tiếng Việt có dấu chuẩn.
