@@ -55,13 +55,17 @@ class FcmService {
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
         await LocalNotificationService.showRemoteNotification(message);
-        await _onAttendanceMessage?.call();
+        if ('${message.data['type'] ?? ''}'.toLowerCase() == 'attendance') {
+          await _onAttendanceMessage?.call();
+        }
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((
         RemoteMessage message,
       ) async {
-        await _onAttendanceMessage?.call();
+        if ('${message.data['type'] ?? ''}'.toLowerCase() == 'attendance') {
+          await _onAttendanceMessage?.call();
+        }
       });
 
       _initialized = true;

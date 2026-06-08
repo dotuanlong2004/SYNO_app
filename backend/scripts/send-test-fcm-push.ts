@@ -24,21 +24,9 @@ async function main() {
   const supabase = getSupabase();
   let profileId = target.value;
   if (target.column === 'email') {
-    const { data: usersPage, error: usersError } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
-    if (usersError) {
-      throw new Error(usersError.message || 'Failed to load auth users');
-    }
-
-    const authUser = usersPage.users.find(
-      (user) => String(user.email || '').trim().toLowerCase() === target.value,
+    throw new Error(
+      'Email lookup is not available because user_profiles does not store email. Use --user-id=<profile_id>.',
     );
-    if (!authUser) {
-      throw new Error(`No auth user found for email ${target.value}`);
-    }
-    profileId = authUser.id;
   }
 
   const { data, error } = await supabase

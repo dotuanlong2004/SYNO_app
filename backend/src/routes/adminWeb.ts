@@ -12,6 +12,7 @@ const path = require('path');
 const { getSupabase } = require('../config/supabase');
 const { isFirebaseAdminReady, sendPushNotification } = require('../config/firebaseAdmin');
 const { mobileAuth } = require('../middleware/mobileAuth');
+const { recordAttendanceCore } = require('./attendance');
 const {
   buildAnnouncementPayload,
   buildAnnouncementPushPayload,
@@ -1377,51 +1378,20 @@ router.post('/mock-scan', async (req, res) => {
   }
 
   try {
-    // Find student_id from student_code, scoped to school
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .select('id, student_code, full_name')
-      .eq('student_code', student_code)
-      .eq('school_id', req.schoolId)
-      .single();
-
-    if (studentError || !student) {
-      console.error('[mock-scan] Student lookup failed:', studentError?.message);
-      return res.status(404).json({ ok: false, error: `Student '${student_code}' not found in school '${req.schoolId}'` });
-    }
-
-    const now = new Date().toISOString();
-
-    // log_type must be 'check_in' | 'check_out' (DB CHECK constraint)
-    // status_detail must be 'on_time' | 'late' | 'leave' (DB CHECK constraint)
-    const { data, error } = await supabase
-      .from('attendance_logs')
-      .insert({
-        student_id: student.id,
-        log_type: 'check_in',
-        scanned_at: now,
-        school_id: req.schoolId,
-        status_detail: 'on_time',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[mock-scan] Insert attendance_logs failed:', error);
-      return res.status(500).json({ ok: false, error: error.message });
-    }
+    const result = await recordAttendanceCore({
+      studentCode: String(student_code).trim(),
+      schoolId: req.schoolId,
+      scannedAt: new Date(),
+    });
 
     return res.json({
       ok: true,
-      student_code: student.student_code,
-      student_name: student.full_name,
-      log_type: data.log_type,
-      scanned_at: data.scanned_at,
-      data,
+      ...result,
+      notification_path: result.blocked ? 'blocked_duplicate' : 'attendance_core',
     });
   } catch (e) {
     console.error('[mock-scan] Unexpected error:', e);
-    return res.status(500).json({ ok: false, error: e.message });
+    return res.status(e.statusCode || 500).json({ ok: false, error: e.message });
   }
 });
 

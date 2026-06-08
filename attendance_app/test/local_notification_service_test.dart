@@ -19,4 +19,24 @@ void main() {
     expect(copy.title, 'Thông báo mới từ SYNO');
     expect(copy.body, 'Nhà trường vừa gửi thông báo mới.');
   });
+
+  test('notificationTagForData prefers backend notification key', () {
+    final tag = LocalNotificationService.notificationTagForData({
+      'type': 'attendance',
+      'notification_key':
+          'attendance:HS0085:check_in:2026-06-08T08:00:00.000Z',
+      'student_code': 'HS0085',
+    });
+
+    expect(tag, 'attendance:HS0085:check_in:2026-06-08T08:00:00.000Z');
+  });
+
+  test('notificationIdForTag is stable for duplicate pushes', () {
+    const tag = 'attendance:HS0085:check_in:2026-06-08T08:00:00.000Z';
+
+    expect(
+      LocalNotificationService.notificationIdForTag(tag),
+      LocalNotificationService.notificationIdForTag(tag),
+    );
+  });
 }

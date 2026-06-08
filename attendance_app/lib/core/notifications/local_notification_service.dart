@@ -1,4 +1,4 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
+﻿import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationDisplayText {
@@ -90,19 +90,43 @@ class LocalNotificationService {
     }
   }
 
+  static String notificationTagForData(Map<String, dynamic> data) {
+    final explicitKey = '${data['notification_key'] ?? ''}'.trim();
+    if (explicitKey.isNotEmpty) return explicitKey;
+
+    return [
+      '${data['type'] ?? 'syno'}',
+      '${data['student_code'] ?? data['student_id'] ?? ''}',
+      '${data['log_type'] ?? data['check_type'] ?? ''}',
+      '${data['check_time'] ?? data['sent_at'] ?? ''}',
+    ].where((value) => value.trim().isNotEmpty).join(':');
+  }
+
+  static int notificationIdForTag(String tag) {
+    var hash = 0;
+    for (final codeUnit in tag.codeUnits) {
+      hash = (hash * 31 + codeUnit) & 0x7fffffff;
+    }
+    return hash == 0 ? 1 : hash;
+  }
+
   static Future<void> showRemoteNotification(RemoteMessage message) async {
     await initialize();
 
-    const androidDetails = AndroidNotificationDetails(
+    final notificationTag = notificationTagForData(message.data);
+    final notificationId = notificationIdForTag(notificationTag);
+
+    final androidDetails = AndroidNotificationDetails(
       'syno_channel',
       'Thông báo SYNO',
       channelDescription: 'Thông báo thời gian thực từ SYNO',
       importance: Importance.max,
       priority: Priority.high,
+      tag: notificationTag,
     );
 
     const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
       windows: WindowsNotificationDetails(),
@@ -113,7 +137,7 @@ class LocalNotificationService {
     final body = message.notification?.body ?? fallback.body;
 
     await _plugin.show(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      id: notificationId,
       title: title,
       body: body,
       notificationDetails: details,
